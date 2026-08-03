@@ -1,0 +1,145 @@
+[project]
+name = "mep-vacancy-monitor"
+version = "0.2.0"
+description = "Track teaching vacancies published by Costa Rica's Ministry of Public Education"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Andres Viquez Marchena" }]
+keywords = ["scraping", "playwright", "costa-rica", "education", "job-vacancies"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Natural Language :: Spanish",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: Browsers",
+    "Topic :: Office/Business",
+]
+
+dependencies = [
+    "playwright>=1.49,<2.0",
+    "pandas>=2.2,<3.0",
+    "openpyxl>=3.1,<4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9.0",
+    "pytest-cov>=6.0,<8.0",
+    "pytest-mock>=3.14,<4.0",
+    "ruff>=0.8,<1.0",
+    "mypy>=1.13,<2.0",
+    "pre-commit>=4.0,<5.0",
+    "pandas-stubs",
+    "types-openpyxl",
+]
+
+[project.urls]
+Homepage = "https://github.com/andresvm18/mep-vacancy-monitor"
+Issues = "https://github.com/andresvm18/mep-vacancy-monitor/issues"
+Changelog = "https://github.com/andresvm18/mep-vacancy-monitor/blob/main/CHANGELOG.md"
+
+# The project is not installable as a package yet: the current layout is a flat
+# script tree inherited from the prototype. This becomes a real distribution
+# with a console entry point once the src/ layout lands.
+[tool.uv]
+package = false
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Ruff: linter and formatter
+# ─────────────────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "N",         # pep8-naming
+    "UP",        # pyupgrade
+    "B",         # flake8-bugbear
+    "A",         # flake8-builtins
+    "C4",        # flake8-comprehensions
+    "DTZ",       # flake8-datetimez: catches naive datetime.now()
+    "T20",       # flake8-print: no print() outside the CLI layer
+    "SIM",       # flake8-simplify
+    "PTH",       # flake8-use-pathlib
+    "RET",       # flake8-return
+    "ARG",       # unused arguments
+    "PL",        # pylint
+    "RUF",       # ruff-specific
+    "BLE",       # flake8-blind-except: catches `except Exception`
+    "S",         # bandit security checks
+]
+ignore = [
+    "PLR0913",   # too many arguments
+    "S101",      # assert is fine in tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The prototype's CLI legitimately prints. Everything else must not.
+"main.py" = ["T20"]
+"utils/console.py" = ["T20"]
+"utils/menu.py" = ["T20"]
+"tests/**" = ["S", "PLR2004"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Mypy: static type checking
+# ─────────────────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_untyped_defs = false   # tighten to true once the refactor lands
+show_error_codes = true
+pretty = true
+
+[[tool.mypy.overrides]]
+module = ["playwright.*"]
+ignore_missing_imports = true
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Pytest
+# ─────────────────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "e2e: hits the live MEP site; excluded from default runs",
+    "slow: takes more than a few seconds",
+]
+
+[tool.coverage.run]
+branch = true
+omit = ["tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
