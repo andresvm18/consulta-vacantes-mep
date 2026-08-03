@@ -46,8 +46,8 @@ secrets.*
 # -----------------------------------------------------------------------------
 build/
 dist/
-ConsultorMEP/
-ConsultorMEP.zip
+ConsultaVacantesMEP/
+ConsultaVacantesMEP.zip
 *.zip
 *.7z
 *.tar.gz
