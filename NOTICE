@@ -1,0 +1,159 @@
+MEP Vacancy Monitor
+Copyright 2025-2026 Andrés Víquez Marchena
+
+This product includes software developed by Andrés Víquez Marchena
+(https://github.com/andresvm18/mep-vacancy-monitor).
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file for the
+full terms.
+
+
+================================================================================
+TRADEMARK AND AFFILIATION NOTICE
+================================================================================
+
+This is an independent, unofficial project. It is NOT affiliated with, endorsed
+by, sponsored by, or connected to the Ministerio de Educación Pública (MEP) of
+Costa Rica, nor to any other government body.
+
+References to "MEP" and to the Ministerio de Educación Pública are purely
+descriptive and serve only to identify the public information source that this
+software reads. No official emblem, logo, seal, or insignia of any government
+entity is used, reproduced, or distributed by this project. The application
+icon is original artwork created for this project.
+
+Per Section 6 of the Apache License 2.0, this license does not grant permission
+to use the trade names, trademarks, service marks, or product names of any
+third party, including those referenced above.
+
+
+================================================================================
+DATA NOTICE
+================================================================================
+
+This software reads publicly accessible pages. It does not authenticate,
+bypass access controls, or circumvent any security measure.
+
+The MEP appointments registry contains personal data of identified individuals,
+including full names and national identification numbers (cédulas). This
+software processes that data locally, never transmits it to any third party,
+excludes it from exports by default, and redacts identifiers from log output.
+
+Users who redistribute data obtained with this tool are solely responsible for
+compliance with Costa Rica's Ley 8968 (Ley de Protección de la Persona frente
+al tratamiento de sus datos personales) and any other applicable law.
+
+Test fixtures included in this repository are anonymized: all names and
+identification numbers have been replaced with synthetic values.
+
+
+================================================================================
+THIRD-PARTY SOFTWARE
+================================================================================
+
+This project depends on the following open-source components. When distributed
+as a frozen Windows executable, these components are bundled into the
+distribution, and this notice applies to that distribution as well.
+
+--------------------------------------------------------------------------------
+Playwright for Python
+Copyright (c) Microsoft Corporation
+License: Apache License 2.0
+https://github.com/microsoft/playwright-python
+
+  Includes Chromium, distributed under the BSD 3-Clause License together with
+  additional licenses listed in the Chromium source tree.
+  Copyright (c) The Chromium Authors
+  https://chromium.googlesource.com/chromium/src/+/main/LICENSE
+
+--------------------------------------------------------------------------------
+pandas
+Copyright (c) 2008-2011, AQR Capital Management, LLC, Lambda Foundry, Inc.
+and PyData Development Team
+Copyright (c) 2011-2023, Open source contributors
+License: BSD 3-Clause
+https://github.com/pandas-dev/pandas
+
+--------------------------------------------------------------------------------
+NumPy
+Copyright (c) 2005-2024, NumPy Developers
+License: BSD 3-Clause
+https://github.com/numpy/numpy
+
+  Bundled builds may include OpenBLAS, distributed under the BSD 3-Clause
+  License.
+  Copyright (c) 2011-2014, The OpenBLAS Project
+
+--------------------------------------------------------------------------------
+openpyxl
+Copyright (c) 2010 openpyxl
+License: MIT
+https://foss.heptapod.net/openpyxl/openpyxl
+
+--------------------------------------------------------------------------------
+et_xmlfile
+License: MIT
+
+--------------------------------------------------------------------------------
+python-dateutil
+Copyright (c) 2003-2011 Gustavo Niemeyer
+Copyright (c) 2012-2014 Tomi Pieviläinen
+Copyright (c) 2014-2016 Yaron de Leeuw
+Copyright (c) 2015-2020 Paul Ganssle
+License: Apache License 2.0 and BSD 3-Clause (dual-licensed)
+https://github.com/dateutil/dateutil
+
+--------------------------------------------------------------------------------
+pytz
+Copyright (c) 2003-2019 Stuart Bishop
+License: MIT
+https://github.com/stub42/pytz
+
+--------------------------------------------------------------------------------
+greenlet
+License: MIT
+https://github.com/python-greenlet/greenlet
+
+--------------------------------------------------------------------------------
+pyee
+License: MIT
+https://github.com/jfhbrook/pyee
+
+--------------------------------------------------------------------------------
+PyInstaller (build-time only; the bootloader is linked into the executable)
+License: GPL 2.0 with an exception permitting the distribution of
+non-GPL applications built with it
+https://github.com/pyinstaller/pyinstaller
+
+--------------------------------------------------------------------------------
+Python Standard Library
+Copyright (c) 2001-2026 Python Software Foundation
+License: Python Software Foundation License Version 2
+https://docs.python.org/3/license.html
+
+--------------------------------------------------------------------------------
+Microsoft Visual C++ Runtime (msvcp140.dll and related, Windows builds only)
+Copyright (c) Microsoft Corporation
+Redistributed under the Microsoft Visual Studio redistributable terms.
+
+
+================================================================================
+PLANNED DEPENDENCIES
+================================================================================
+
+The following will be added in upcoming releases and are listed here in
+advance so that licensing implications are tracked from the start.
+
+--------------------------------------------------------------------------------
+PySide6 (Qt for Python) — planned for v1.2.0
+Copyright (c) The Qt Company Ltd.
+License: LGPL v3
+
+  Qt is dynamically linked and is not statically compiled into this project.
+  Users of a distributed binary have the right to replace the bundled Qt
+  libraries with their own compatible versions. The full LGPL v3 text and the
+  Qt source availability notice will accompany any binary that bundles Qt.
+
+--------------------------------------------------------------------------------
+Typer, Rich, pydantic-settings, tenacity, httpx
+Licenses: MIT / Apache-2.0 (see each project for details)
