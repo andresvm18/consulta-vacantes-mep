@@ -38,5 +38,12 @@ Baseline snapshot of the pre-modernization codebase, tagged as `v0.3.0-legacy`.
 - The package layout declared in `pyproject.toml` does not exist; the project is
   not installable.
 - Appointment rows containing an empty cell are silently discarded.
-- One Chromium instance is launched per vacancy number.
+- Postback timeouts are swallowed, so a slow response is reported as "no
+  appointments found" and is indistinguishable from a genuine empty result.
+  Baseline run on 2026-08-03 returned 1 appointment across 66 vacancies; this
+  figure is unverified.
+- Vacancy results are not cached between menu selections, so consecutive
+  searches re-scrape all regional offices.
+- One Chromium instance is launched per vacancy number, costing roughly 80
+  seconds of startup overhead before the first result.
 - The PyInstaller spec does not bundle Playwright browser binaries.
