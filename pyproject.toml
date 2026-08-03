@@ -1,7 +1,12 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+
 [project]
-name = "mep-vacancy-monitor"
-version = "0.2.0"
-description = "Track teaching vacancies published by Costa Rica's Ministry of Public Education"
+name = "consulta-vacantes-mep"
+version = "0.3.0"
+description = "Consulta vacantes y nombramientos docentes publicados por el MEP de Costa Rica"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
@@ -38,24 +43,38 @@ dev = [
     "types-openpyxl",
 ]
 
-[project.urls]
-Homepage = "https://github.com/andresvm18/mep-vacancy-monitor"
-Issues = "https://github.com/andresvm18/mep-vacancy-monitor/issues"
-Changelog = "https://github.com/andresvm18/mep-vacancy-monitor/blob/main/CHANGELOG.md"
+[project.scripts]
+consulta-vacantes-mep = "consulta_vacantes_mep.cli:main"
 
-# The project is not installable as a package yet: the current layout is a flat
-# script tree inherited from the prototype. This becomes a real distribution
-# with a console entry point once the src/ layout lands.
-[tool.uv]
-package = false
+[project.urls]
+Homepage = "https://github.com/andresvm18/consulta-vacantes-mep"
+Issues = "https://github.com/andresvm18/consulta-vacantes-mep/issues"
+Changelog = "https://github.com/andresvm18/consulta-vacantes-mep/blob/main/CHANGELOG.md"
+
+
+# Layout src/: el codigo solo es importable si el paquete esta instalado, lo
+# que garantiza que los tests prueben lo mismo que se distribuye.
+[tool.hatch.build.targets.wheel]
+packages = ["src/consulta_vacantes_mep"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/consulta_vacantes_mep",
+    "tests",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "CHANGELOG.md",
+]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Ruff: linter and formatter
+#  Ruff: linter y formateador
 # ─────────────────────────────────────────────────────────────────────────────
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = [
@@ -67,27 +86,45 @@ select = [
     "B",         # flake8-bugbear
     "A",         # flake8-builtins
     "C4",        # flake8-comprehensions
-    "DTZ",       # flake8-datetimez: catches naive datetime.now()
-    "T20",       # flake8-print: no print() outside the CLI layer
+    "DTZ",       # flake8-datetimez: detecta datetime.now() sin zona horaria
+    "T20",       # flake8-print: nada de print() fuera de la capa CLI
     "SIM",       # flake8-simplify
     "PTH",       # flake8-use-pathlib
     "RET",       # flake8-return
-    "ARG",       # unused arguments
+    "ARG",       # argumentos sin usar
     "PL",        # pylint
-    "RUF",       # ruff-specific
-    "BLE",       # flake8-blind-except: catches `except Exception`
-    "S",         # bandit security checks
+    "RUF",       # reglas propias de ruff
+    "BLE",       # flake8-blind-except: detecta `except Exception`
+    "S",         # chequeos de seguridad de bandit
 ]
+
 ignore = [
-    "PLR0913",   # too many arguments
-    "S101",      # assert is fine in tests
+    "PLR0913",   # demasiados argumentos
+    "S101",      # assert es legitimo en tests
+
+    # La interfaz esta en espanol: las comillas angulares, la enye y los
+    # caracteres de dibujo de caja son intencionales. Ignorados de forma
+    # permanente, no son deuda tecnica.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+
+    # ── Trinquete progresivo ──────────────────────────────────────────────────
+    # Cada linea de abajo se elimina en la etapa indicada, cuando el codigo que
+    # la viola queda corregido. No agregar entradas nuevas aqui.
+    "E501",      # Etapa 1: firmas largas en los scrapers
+    "PLR2004",   # Etapa 1: los 13 y 8 magicos del conteo de columnas
+    "DTZ005",    # Etapa 3: datetime.now() sin zona horaria
+    "BLE001",    # Etapa 4: except Exception generalizado
+    "S603",      # Etapa 4: subprocess.run en playwright_setup
+    "S605",      # Etapa 6: os.system("cls") en console.py
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# The prototype's CLI legitimately prints. Everything else must not.
-"main.py" = ["T20"]
-"utils/console.py" = ["T20"]
-"utils/menu.py" = ["T20"]
+# La capa CLI legitimamente imprime. Todo lo demas no.
+"src/consulta_vacantes_mep/cli.py" = ["T20"]
+"src/consulta_vacantes_mep/utils/console.py" = ["T20"]
+"src/consulta_vacantes_mep/utils/menu.py" = ["T20"]
 "tests/**" = ["S", "PLR2004"]
 
 [tool.ruff.lint.pydocstyle]
@@ -95,17 +132,18 @@ convention = "google"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Mypy: static type checking
+#  Mypy: chequeo estatico de tipos
 # ─────────────────────────────────────────────────────────────────────────────
 [tool.mypy]
 python_version = "3.11"
+files = ["src", "tests"]
 warn_return_any = true
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 no_implicit_optional = true
 check_untyped_defs = true
-disallow_untyped_defs = false   # tighten to true once the refactor lands
+disallow_untyped_defs = false   # pasa a true cuando lleguen los modelos (Etapa 3)
 show_error_codes = true
 pretty = true
 
@@ -126,12 +164,13 @@ addopts = [
     "--strict-config",
 ]
 markers = [
-    "e2e: hits the live MEP site; excluded from default runs",
-    "slow: takes more than a few seconds",
+    "e2e: consulta el sitio real del MEP; excluido de las corridas por defecto",
+    "slow: tarda mas de unos pocos segundos",
 ]
 
 [tool.coverage.run]
 branch = true
+source = ["src/consulta_vacantes_mep"]
 omit = ["tests/*"]
 
 [tool.coverage.report]
