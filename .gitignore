@@ -1,0 +1,197 @@
+# Generated reports. May contain personal data. Never commit.
+outputs/
+exports/*.xlsx
+exports/*.csv
+*.xlsx
+*.xls
+*.csv
+!tests/fixtures/**/*.csv 
+
+# Runtime logs. Machine-specific noise, and may reference identifiers.
+logs/
+*.log
+*.log.*
+
+# Local databases: scrape history, seen-vacancy state, user data.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Saved HTML captured from the live site before anonymization.
+# Only committed fixtures under tests/fixtures/html/ are safe.
+scripts/captures/
+*.raw.html
+
+
+# -----------------------------------------------------------------------------
+#  SECRETS AND CREDENTIALS
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.*
+.secrets/
+
+
+# -----------------------------------------------------------------------------
+#  BUILD ARTIFACTS AND FROZEN DISTRIBUTIONS
+# -----------------------------------------------------------------------------
+build/
+dist/
+ConsultorMEP/
+ConsultorMEP.zip
+*.zip
+*.7z
+*.tar.gz
+*.exe
+*.msi
+*.dmg
+*.AppImage
+*.manifest
+*.toc
+*.pyz
+*.pkg
+warn-*.txt
+xref-*.html
+
+# -----------------------------------------------------------------------------
+#  PYTHON BYTECODE AND PACKAGING METADATA
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+*.egg
+.installed.cfg
+MANIFEST
+
+
+# -----------------------------------------------------------------------------
+#  VIRTUAL ENVIRONMENTS
+# -----------------------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+.env/
+virtualenv/
+pyvenv.cfg
+
+
+# -----------------------------------------------------------------------------
+#  PLAYWRIGHT
+# -----------------------------------------------------------------------------
+.playwright/
+playwright-report/
+playwright/.cache/
+test-results/
+trace.zip
+videos/
+screenshots/
+!docs/screenshots/              
+
+
+# -----------------------------------------------------------------------------
+#  TESTING, COVERAGE, AND TYPE CHECKING CACHES
+# -----------------------------------------------------------------------------
+.pytest_cache/
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+nosetests.xml
+*.cover
+.hypothesis/
+.tox/
+.nox/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+.ruff_cache/
+.import_linter_cache/
+
+
+# -----------------------------------------------------------------------------
+#  IDE AND EDITOR SETTINGS
+# -----------------------------------------------------------------------------
+.vscode/
+!.vscode/extensions.json 
+.idea/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+.spyderproject
+.ropeproject
+.sublime-project
+.sublime-workspace
+
+
+# -----------------------------------------------------------------------------
+#  OPERATING SYSTEM CRUFT
+# -----------------------------------------------------------------------------
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+.directory
+.Trash-*
+.nfs*
+
+
+# -----------------------------------------------------------------------------
+#  DOCUMENTATION BUILD OUTPUT
+# -----------------------------------------------------------------------------
+site/
+docs/_build/
+docs/api/generated/
+
+
+# -----------------------------------------------------------------------------
+#  MISCELLANEOUS
+# -----------------------------------------------------------------------------
+*.bak
+*.tmp
+*.orig
+*.rej
+.ipynb_checkpoints/
+profile_output/
+*.prof
+node_modules/
