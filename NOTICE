@@ -1,8 +1,8 @@
-MEP Vacancy Monitor
++Consulta Vacantes MEP
 Copyright 2025-2026 Andrés Víquez Marchena
 
 This product includes software developed by Andrés Víquez Marchena
-(https://github.com/andresvm18/mep-vacancy-monitor).
+(https://github.com/andresvm18/consulta-vacantes-mep)
 
 Licensed under the Apache License, Version 2.0. See the LICENSE file for the
 full terms.
@@ -36,8 +36,12 @@ bypass access controls, or circumvent any security measure.
 
 The MEP appointments registry contains personal data of identified individuals,
 including full names and national identification numbers (cédulas). This
-software processes that data locally, never transmits it to any third party,
-excludes it from exports by default, and redacts identifiers from log output.
+software processes that data locally, never transmits it to any third party.
+
+Exports currently include the personal data fields as published by the source.
+Opt-in export of personal fields and redaction of identifiers in log output are
+planned; see CHANGELOG.md. Until then, treat generated workbooks and log files
+as containing personal data.
 
 Users who redistribute data obtained with this tool are solely responsible for
 compliance with Costa Rica's Ley 8968 (Ley de Protección de la Persona frente
