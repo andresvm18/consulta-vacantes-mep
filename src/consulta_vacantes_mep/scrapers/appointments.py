@@ -1,8 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from playwright.sync_api import sync_playwright
 
-from utils.logger import write_log, write_error
-from utils.console import clear_screen, print_section, print_result
+from consulta_vacantes_mep.utils.console import clear_screen, print_result, print_section
+from consulta_vacantes_mep.utils.logger import write_error, write_log
 
 APPOINTMENTS_URL = "https://apps.mep.go.cr/consultanombramientos/"
 

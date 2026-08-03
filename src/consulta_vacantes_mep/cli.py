@@ -1,16 +1,13 @@
-from scrapers.vacancies_scraper import (
-    scrape_all_vacancies,
-    filter_vacancies_by_specialty,
-)
-
-from scrapers.appointments_scraper import (
-    scrape_appointments_for_vacancies,
-)
-
-from exports.excel_exporter import export_data_to_excel
-from utils.menu import show_welcome_menu, ask_year
-from utils.playwright_setup import ensure_chromium_installed
 from datetime import datetime
+
+from consulta_vacantes_mep.exports.excel import export_data_to_excel
+from consulta_vacantes_mep.scrapers.appointments import scrape_appointments_for_vacancies
+from consulta_vacantes_mep.scrapers.vacancies import (
+    filter_vacancies_by_specialty,
+    scrape_all_vacancies,
+)
+from consulta_vacantes_mep.utils.menu import show_welcome_menu
+from consulta_vacantes_mep.utils.playwright_setup import ensure_chromium_installed
 
 def print_vacancies(vacancies):
     if not vacancies:

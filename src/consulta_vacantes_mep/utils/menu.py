@@ -1,6 +1,6 @@
 import sys
 
-from utils.console import clear_screen
+from consulta_vacantes_mep.utils.console import clear_screen
 
 MENU_OPTIONS = {
     "1": "Buscar todas las especialidades",
@@ -58,24 +58,3 @@ def ask_year() -> str:
         return DEFAULT_YEAR
 
     return year
-
-
-# ── Example usage ─────────────────────────────────────────────────────────────
-
-def main():
-    while True:
-        choice = show_welcome_menu()
-
-        if choice == "3":
-            print("\n  Hasta pronto.\n")
-            sys.exit(0)
-
-        year = ask_year()
-        print(f"\n  → Opción {choice} — año {year}")
-        print("  (Aquí iría la lógica de búsqueda…)\n")
-        input("  Presione Enter para volver al menú…")
-        clear_screen()
-
-
-if __name__ == "__main__":
-    main()

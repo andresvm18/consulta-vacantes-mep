@@ -1,18 +1,6 @@
-import sys
-from pathlib import Path
 from datetime import datetime
 
-
-def get_app_root():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-
-    return Path(__file__).resolve().parent.parent
-
-
-PROJECT_ROOT = get_app_root()
-
-LOG_DIR = PROJECT_ROOT / "logs"
+from consulta_vacantes_mep.utils.paths import LOG_DIR
 
 LOG_FILE = LOG_DIR / "scraper.log"
 ERROR_FILE = LOG_DIR / "errors.log"

@@ -1,20 +1,10 @@
-import sys
-from pathlib import Path
 from datetime import datetime
+
 import pandas as pd
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-
-def get_app_root():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-
-    return Path(__file__).resolve().parent.parent
-
-
-PROJECT_ROOT = get_app_root()
-OUTPUT_DIR = PROJECT_ROOT / "outputs"
+from consulta_vacantes_mep.utils.paths import OUTPUT_DIR
 
 
 def format_worksheet(worksheet):

@@ -1,8 +1,8 @@
 from playwright.sync_api import sync_playwright
 
-from utils.text_utils import normalize_text
-from utils.logger import write_log, write_error
-from utils.console import clear_screen, print_section, print_progress
+from consulta_vacantes_mep.utils.console import clear_screen, print_progress, print_section
+from consulta_vacantes_mep.utils.logger import write_error, write_log
+from consulta_vacantes_mep.utils.text import normalize_text
 
 VACANCIES_URL = "https://apps.mep.go.cr/formulario"
 
