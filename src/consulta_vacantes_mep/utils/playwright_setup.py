@@ -14,12 +14,13 @@ def ensure_chromium_installed():
 
     except Exception as error:
         if getattr(sys, "frozen", False):
-            print("Playwright Chromium no está instalado y no se puede instalar automáticamente desde un ejecutable empaquetado.")
-            print("El ejecutable debe construirse con los navegadores de Playwright incluidos.")
+            print("\nChromium de Playwright no está instalado.")
+            print("El ejecutable debe incluir los navegadores de Playwright.")
             print(f"Detalles: {error}")
             return False
 
-        print("Playwright Chromium no está instalado. Instalándolo automáticamente...")
+        print("\nChromium de Playwright no está instalado.")
+        print("Instalando Chromium automáticamente...")
 
         try:
             subprocess.run(
