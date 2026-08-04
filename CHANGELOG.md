@@ -10,7 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Project README with roadmap and development setup instructions.
 - This changelog.
+- Typed domain models (`Vacancy`, `Appointment`) with English field names, and a
+  single definition of the Spanish labels shown to users.
+- HTML fixtures captured from both MEP sites, with personal data redacted, so
+  the parser can be tested without network access.
 
+### Fixed
+- Table extraction now maps cells by the column attribute each cell declares
+  instead of by position. Vacancy rows contain two hidden cells that positional
+  slicing skipped only by coincidence.
+- Rows missing a required column are logged with the column name instead of
+  being discarded silently.
+- Exported cell values are now whitespace-normalized. The source pads several
+  fields with trailing spaces and non-breaking spaces, which previously reached
+  the workbook verbatim.
+- Restore the settle delay after switching regional office. The grid keeps the
+  previous office's rows in the DOM while it re-renders, so waiting for a row
+  to exist matched stale content and produced rows attributed to the wrong
+  office.
+  
 ### Changed
 - Unified project naming across `NOTICE`, `pyproject.toml`, and the PyInstaller
   spec. The canonical distribution name is `consulta-vacantes-mep`, the Python
