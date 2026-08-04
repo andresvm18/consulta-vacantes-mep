@@ -2,67 +2,22 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from playwright.sync_api import sync_playwright
 
+from consulta_vacantes_mep.models import Appointment, Vacancy
+from consulta_vacantes_mep.parsing import APPOINTMENTS_TABLE_SELECTOR, parse_appointments
 from consulta_vacantes_mep.settings import SCRAPING
 from consulta_vacantes_mep.utils.console import clear_screen, print_result, print_section
 from consulta_vacantes_mep.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-APPOINTMENT_COLUMNS = [
-    "Vacante",
-    "Cédula",
-    "Nombre",
-    "Institución",
-    "Clase Puesto",
-    "Especialidad",
-    "Grupo",
-    "N° Puesto",
-    "Rige",
-    "Vence",
-    "Estado",
-    "Calificación R. Elegibles",
-    "Título Nómina",
-]
-
 
 # ── Extraction ────────────────────────────────────────────────────────────────
-
-def _extract_appointments_from_table(page) -> list[dict]:
-    rows = page.locator("table tr")
-    appointments = []
-
-    for i in range(rows.count()):
-        columns = rows.nth(i).locator("td")
-
-        if columns.count() == 0:
-            continue
-
-        data = []
-
-        for j in range(columns.count()):
-            try:
-                text = columns.nth(j).inner_text(timeout=SCRAPING.cell_timeout_ms).strip()
-            except Exception:
-                logger.exception("Error reading appointment table cell")
-                continue
-
-            if text:
-                data.append(text)
-
-        data = data[:13]
-
-        if len(data) == 13:
-            appointments.append(dict(zip(APPOINTMENT_COLUMNS, data, strict=True)))
-
-    return appointments
-
-
 def _search_single_appointment(
     vacancy_number: str,
     year: int,
     headless: bool = SCRAPING.headless,
     attempt: int = 1,
-) -> list[dict]:
+) -> list[Appointment]:
     """Fetch appointments for one vacancy number, retrying on failure."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
@@ -94,11 +49,13 @@ def _search_single_appointment(
 
             page.wait_for_timeout(SCRAPING.settle_ms)
 
-            if page.locator("table").count() == 0:
+            if page.locator(APPOINTMENTS_TABLE_SELECTOR).count() == 0:
                 logger.info("Vacancy %s: no appointments found.", vacancy_number)
                 return []
 
-            appointments = _extract_appointments_from_table(page)
+            appointments = parse_appointments(
+                page.locator(APPOINTMENTS_TABLE_SELECTOR), vacancy_number
+            )
             logger.info(
                 "Vacancy %s: %d appointments found.", vacancy_number, len(appointments)
             )
@@ -130,14 +87,14 @@ def _search_single_appointment(
 
 # ── Public API ────────────────────────────────────────────────────────────────
 def scrape_appointments_for_vacancies(
-    vacancies: list[dict],
+    vacancies: list[Vacancy],
     year: int,
     headless: bool = SCRAPING.headless,
-) -> list[dict]:
+) -> list[Appointment]:
     if not vacancies:
         return []
 
-    vacancy_numbers = list({v["Vacante"] for v in vacancies if v.get("Vacante")})
+    vacancy_numbers = list({v.number for v in vacancies if v.number})
     total = len(vacancy_numbers)
 
     clear_screen()
@@ -146,7 +103,7 @@ def scrape_appointments_for_vacancies(
         f"{SCRAPING.max_concurrency} consultas simultáneas"
     )
 
-    all_appointments = []
+    all_appointments: list[Appointment] = []
 
     with ThreadPoolExecutor(max_workers=SCRAPING.max_concurrency) as executor:
         futures = {

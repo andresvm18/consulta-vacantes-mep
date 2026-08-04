@@ -1,5 +1,7 @@
 from playwright.sync_api import sync_playwright
 
+from consulta_vacantes_mep.models import Vacancy
+from consulta_vacantes_mep.parsing import VACANCIES_TABLE_SELECTOR, parse_vacancies
 from consulta_vacantes_mep.settings import SCRAPING
 from consulta_vacantes_mep.utils.console import clear_screen, print_progress, print_section
 from consulta_vacantes_mep.utils.logger import get_logger
@@ -7,19 +9,7 @@ from consulta_vacantes_mep.utils.text import normalize_text
 
 logger = get_logger(__name__)
 
-VACANCY_COLUMNS = [
-    "Vacante",
-    "Dirección Regional",
-    "Clase de Puesto",
-    "Especialidad",
-    "Institución",
-    "Lecciones",
-    "Rige",
-    "Vence",
-]
-
 # ── Extraction ────────────────────────────────────────────────────────────────
-
 def _get_regional_offices(page) -> list[dict]:
     select = page.locator("select").first
     options = select.locator("option")
@@ -35,51 +25,26 @@ def _get_regional_offices(page) -> list[dict]:
     return offices
 
 
-def _extract_vacancies_from_table(page) -> list[dict]:
-    rows = page.locator("table tr")
-    vacancies = []
-
-    for i in range(rows.count()):
-        columns = rows.nth(i).locator("td")
-
-        if columns.count() == 0:
-            continue
-
-        data = []
-
-        for j in range(columns.count()):
-            try:
-                text = columns.nth(j).inner_text(timeout=SCRAPING.cell_timeout_ms).strip()
-            except Exception as error:
-                logger.exception(f"Error reading vacancy table cell: {error}")
-                continue
-
-            if text.upper() == "APLICAR":
-                continue
-
-            data.append(text)
-
-        data = data[:8]
-
-        if len(data) == 8:
-            vacancies.append(dict(zip(VACANCY_COLUMNS, data, strict=True)))
-
-    return vacancies
-
-
-def _scrape_regional_office(page, office: dict, attempt: int = 1) -> list[dict]:
-    """Scrape one regional office, retrying up to MAX_RETRIES times."""
+def _scrape_regional_office(page, office: dict, attempt: int = 1) -> list[Vacancy]:
+    """Scrape one regional office, retrying on failure."""
     try:
         page.locator("select").first.select_option(office["value"])
 
         try:
-            page.wait_for_selector("table tr td", timeout=SCRAPING.selector_timeout_ms)
+            page.wait_for_selector(
+                f"{VACANCIES_TABLE_SELECTOR} tbody tr",
+                timeout=SCRAPING.selector_timeout_ms,
+            )
+            # The grid keeps the previous office's rows in the DOM while Blazor
+            # re-renders, so waiting for a row to exist does not mean the new
+            # data has arrived. This delay is a stopgap until stage 5 replaces
+            # it with a wait on the actual render.
             page.wait_for_timeout(SCRAPING.settle_ms)
         except Exception:
             logger.warning("No result table for %s within timeout", office["text"])
             return []
 
-        return _extract_vacancies_from_table(page)
+        return parse_vacancies(page.locator(VACANCIES_TABLE_SELECTOR), office["text"])
 
     except Exception:
         if attempt < SCRAPING.max_retries:
@@ -89,16 +54,14 @@ def _scrape_regional_office(page, office: dict, attempt: int = 1) -> list[dict]:
             return _scrape_regional_office(page, office, attempt + 1)
 
         logger.exception(
-            "Regional %s failed after %d attempts",
-            office["text"],
-            SCRAPING.max_retries,
+            "Regional %s failed after %d attempts", office["text"], SCRAPING.max_retries
         )
         return []
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
-def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[dict]:
-    all_vacancies = []
+def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[Vacancy]:
+    all_vacancies: list[Vacancy] = []
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
@@ -133,6 +96,8 @@ def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[dict]:
     return all_vacancies
 
 
-def filter_vacancies_by_specialty(vacancies: list[dict], specialty: str) -> list[dict]:
+def filter_vacancies_by_specialty(
+    vacancies: list[Vacancy], specialty: str
+) -> list[Vacancy]:
     normalized = normalize_text(specialty)
-    return [v for v in vacancies if normalized in normalize_text(v["Especialidad"])]
+    return [v for v in vacancies if normalized in normalize_text(v.specialty)]
