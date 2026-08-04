@@ -10,6 +10,7 @@ The scrapers record what the site published; interpretation belongs elsewhere.
 """
 
 from dataclasses import dataclass
+from enum import Enum
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,3 +48,25 @@ class Appointment:
     status: str
     eligibility_rating: str
     roster_title: str
+
+
+class QueryOutcome(Enum):
+    """Why an appointments query produced the records it did."""
+    FOUND = "found"
+    EMPTY = "empty"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True, slots=True)
+class AppointmentQuery:
+    """The result of querying appointments for one vacancy number.
+
+    The MEP appointments page renders nothing at all when a query returns no
+    rows, and also renders nothing when the query never ran. Recording the
+    outcome alongside the records keeps those two cases distinguishable
+    downstream instead of collapsing both into an empty list.
+    """
+    vacancy_number: str
+    outcome: QueryOutcome
+    appointments: list[Appointment]
+    error: str | None = None
