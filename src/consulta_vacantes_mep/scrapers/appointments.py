@@ -1,9 +1,17 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Page, sync_playwright
 
-from consulta_vacantes_mep.models import Appointment, Vacancy
+from consulta_vacantes_mep.exceptions import PermanentScrapingError, ScrapingError
+from consulta_vacantes_mep.models import (
+    Appointment,
+    AppointmentQuery,
+    QueryOutcome,
+    Vacancy,
+)
 from consulta_vacantes_mep.parsing import APPOINTMENTS_TABLE_SELECTOR, parse_appointments
+from consulta_vacantes_mep.retry import with_retry
+from consulta_vacantes_mep.scrapers.errors import classify, detect_challenge
 from consulta_vacantes_mep.settings import SCRAPING
 from consulta_vacantes_mep.utils.console import clear_screen, print_result, print_section
 from consulta_vacantes_mep.utils.logger import get_logger
@@ -11,78 +19,80 @@ from consulta_vacantes_mep.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-# ── Extraction ────────────────────────────────────────────────────────────────
-def _search_single_appointment(
-    vacancy_number: str,
-    year: int,
-    headless: bool = SCRAPING.headless,
-    attempt: int = 1,
-) -> list[Appointment]:
-    """Fetch appointments for one vacancy number, retrying on failure."""
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
+def _run_query(page: Page, vacancy_number: str, year: int) -> list[Appointment]:
+    """Submit one query and read the result grid.
+
+    Raises a ScrapingError subclass on failure. An empty return means the site
+    rendered no grid, which is how it reports a vacancy with no appointments.
+    """
+    try:
+        page.goto(
+            SCRAPING.appointments_url,
+            wait_until="domcontentloaded",
+            timeout=SCRAPING.page_load_timeout_ms,
+        )
+        detect_challenge(page)
+
+        page.wait_for_timeout(SCRAPING.settle_ms)
+
+        page.locator("#radioVacante").check()
+        page.locator("#txtCedula").fill(vacancy_number)
+        page.locator("#ddlAño").select_option(str(year))
+        page.evaluate("__doPostBack('btnConsultar','')")
+
+        page.wait_for_load_state(
+            "domcontentloaded", timeout=SCRAPING.postback_timeout_ms
+        )
+        page.wait_for_timeout(SCRAPING.settle_ms)
+
+        detect_challenge(page)
+
+    except ScrapingError:
+        raise
+    except Exception as error:
+        raise classify(error, f"vacancy {vacancy_number}") from error
+
+    table = page.locator(APPOINTMENTS_TABLE_SELECTOR)
+
+    if table.count() == 0:
+        return []
+
+    return parse_appointments(table, vacancy_number)
+
+
+_run_query_with_retry = with_retry(_run_query)
+
+def _query_appointments(
+    vacancy_number: str, year: int, headless: bool
+) -> AppointmentQuery:
+    """Look up appointments for one vacancy, reporting why the result is empty."""
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=headless)
         page = browser.new_page()
 
         try:
-            page.goto(
-                SCRAPING.appointments_url,
-                wait_until="domcontentloaded",
-                timeout=SCRAPING.page_load_timeout_ms,
+            appointments = _run_query_with_retry(page, vacancy_number, year)
+
+        except ScrapingError as error:
+            logger.warning("Vacancy %s: query failed (%s)", vacancy_number, error)
+            return AppointmentQuery(
+                vacancy_number=vacancy_number,
+                outcome=QueryOutcome.FAILED,
+                appointments=[],
+                error=str(error),
             )
-            page.wait_for_timeout(SCRAPING.settle_ms)
-
-            page.locator("#radioVacante").check()
-            page.locator("#txtCedula").fill(str(vacancy_number))
-            page.locator("#ddlAño").select_option(str(year))
-            page.evaluate("__doPostBack('btnConsultar','')")
-
-            try:
-                page.wait_for_load_state(
-                    "domcontentloaded", timeout=SCRAPING.postback_timeout_ms
-                )
-            except Exception:
-                logger.warning(
-                    "Vacancy %s: postback did not settle within %dms",
-                    vacancy_number,
-                    SCRAPING.postback_timeout_ms,
-                )
-
-            page.wait_for_timeout(SCRAPING.settle_ms)
-
-            if page.locator(APPOINTMENTS_TABLE_SELECTOR).count() == 0:
-                logger.info("Vacancy %s: no appointments found.", vacancy_number)
-                return []
-
-            appointments = parse_appointments(
-                page.locator(APPOINTMENTS_TABLE_SELECTOR), vacancy_number
-            )
-            logger.info(
-                "Vacancy %s: %d appointments found.", vacancy_number, len(appointments)
-            )
-            return appointments
-
-        except Exception:
-            if attempt < SCRAPING.max_retries:
-                logger.warning(
-                    "Retry %d/%d for vacancy %s",
-                    attempt,
-                    SCRAPING.max_retries,
-                    vacancy_number,
-                )
-                browser.close()
-                return _search_single_appointment(
-                    vacancy_number, year, headless, attempt + 1
-                )
-
-            logger.exception(
-                "Vacancy %s failed after %d attempts",
-                vacancy_number,
-                SCRAPING.max_retries,
-            )
-            raise
 
         finally:
             browser.close()
+
+    if not appointments:
+        logger.info("Vacancy %s: no appointments found.", vacancy_number)
+        return AppointmentQuery(vacancy_number, QueryOutcome.EMPTY, [])
+
+    logger.info(
+        "Vacancy %s: %d appointments found.", vacancy_number, len(appointments)
+    )
+    return AppointmentQuery(vacancy_number, QueryOutcome.FOUND, appointments)
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -90,11 +100,11 @@ def scrape_appointments_for_vacancies(
     vacancies: list[Vacancy],
     year: int,
     headless: bool = SCRAPING.headless,
-) -> list[Appointment]:
+) -> list[AppointmentQuery]:
     if not vacancies:
         return []
 
-    vacancy_numbers = list({v.number for v in vacancies if v.number})
+    vacancy_numbers = sorted({v.number for v in vacancies if v.number})
     total = len(vacancy_numbers)
 
     clear_screen()
@@ -103,25 +113,44 @@ def scrape_appointments_for_vacancies(
         f"{SCRAPING.max_concurrency} consultas simultáneas"
     )
 
-    all_appointments: list[Appointment] = []
+    results: list[AppointmentQuery] = []
 
     with ThreadPoolExecutor(max_workers=SCRAPING.max_concurrency) as executor:
         futures = {
-            executor.submit(_search_single_appointment, vn, year, headless): vn
-            for vn in vacancy_numbers
+            executor.submit(_query_appointments, number, year, headless): number
+            for number in vacancy_numbers
         }
 
         for index, future in enumerate(as_completed(futures), start=1):
-            vacancy_number = futures[future]
+            number = futures[future]
 
             try:
-                result = future.result()
-                print_result(index, total, vacancy_number, len(result))
-                all_appointments.extend(result)
+                query = future.result()
 
-            except Exception:
-                print_result(index, total, vacancy_number, None)
-                logger.exception("Error fetching vacancy %s", vacancy_number)
+            except PermanentScrapingError as error:
+                logger.exception("Vacancy %s: page structure changed", number)
+                query = AppointmentQuery(
+                    number, QueryOutcome.FAILED, [], str(error)
+                )
 
-    print_section(f"Total: {len(all_appointments)} nombramientos encontrados.")
-    return all_appointments
+            results.append(query)
+            print_result(
+                index,
+                total,
+                number,
+                len(query.appointments)
+                if query.outcome is not QueryOutcome.FAILED
+                else None,
+            )
+
+    found = sum(len(q.appointments) for q in results)
+    failed = sum(1 for q in results if q.outcome is QueryOutcome.FAILED)
+
+    if failed:
+        print_section(
+            f"Total: {found} nombramientos  ·  {failed} consultas fallidas"
+        )
+    else:
+        print_section(f"Total: {found} nombramientos encontrados.")
+
+    return results

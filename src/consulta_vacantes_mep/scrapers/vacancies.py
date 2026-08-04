@@ -1,13 +1,51 @@
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Page, sync_playwright
 
+from consulta_vacantes_mep.exceptions import PermanentScrapingError, ScrapingError
 from consulta_vacantes_mep.models import Vacancy
 from consulta_vacantes_mep.parsing import VACANCIES_TABLE_SELECTOR, parse_vacancies
+from consulta_vacantes_mep.retry import with_retry
+from consulta_vacantes_mep.scrapers.errors import classify
 from consulta_vacantes_mep.settings import SCRAPING
 from consulta_vacantes_mep.utils.console import clear_screen, print_progress, print_section
 from consulta_vacantes_mep.utils.logger import get_logger
 from consulta_vacantes_mep.utils.text import normalize_text
 
 logger = get_logger(__name__)
+
+def _select_office(page: Page, office: dict) -> None:
+    """Select a regional office and wait for its results to render."""
+    try:
+        page.locator("select").first.select_option(office["value"])
+
+        page.wait_for_selector(
+            f"{VACANCIES_TABLE_SELECTOR} tbody tr",
+            timeout=SCRAPING.selector_timeout_ms,
+        )
+        # The grid keeps the previous office's rows in the DOM while Blazor
+        # re-renders, so waiting for a row to exist does not mean the new data
+        # has arrived. Stage 5 replaces this with a wait on the render itself.
+        page.wait_for_timeout(SCRAPING.settle_ms)
+
+    except Exception as error:
+        raise classify(error, f"office {office['text']}") from error
+
+
+_select_office_with_retry = with_retry(_select_office)
+
+
+def _scrape_regional_office(page: Page, office: dict) -> list[Vacancy]:
+    """Scrape one regional office. Raises on permanent failure."""
+    try:
+        _select_office_with_retry(page, office)
+
+    except PermanentScrapingError:
+        raise
+
+    except ScrapingError as error:
+        logger.warning("Office %s: %s", office["text"], error)
+        return []
+
+    return parse_vacancies(page.locator(VACANCIES_TABLE_SELECTOR), office["text"])
 
 # ── Extraction ────────────────────────────────────────────────────────────────
 def _get_regional_offices(page) -> list[dict]:
@@ -24,39 +62,6 @@ def _get_regional_offices(page) -> list[dict]:
 
     return offices
 
-
-def _scrape_regional_office(page, office: dict, attempt: int = 1) -> list[Vacancy]:
-    """Scrape one regional office, retrying on failure."""
-    try:
-        page.locator("select").first.select_option(office["value"])
-
-        try:
-            page.wait_for_selector(
-                f"{VACANCIES_TABLE_SELECTOR} tbody tr",
-                timeout=SCRAPING.selector_timeout_ms,
-            )
-            # The grid keeps the previous office's rows in the DOM while Blazor
-            # re-renders, so waiting for a row to exist does not mean the new
-            # data has arrived. This delay is a stopgap until stage 5 replaces
-            # it with a wait on the actual render.
-            page.wait_for_timeout(SCRAPING.settle_ms)
-        except Exception:
-            logger.warning("No result table for %s within timeout", office["text"])
-            return []
-
-        return parse_vacancies(page.locator(VACANCIES_TABLE_SELECTOR), office["text"])
-
-    except Exception:
-        if attempt < SCRAPING.max_retries:
-            logger.warning(
-                "Retry %d/%d for %s", attempt, SCRAPING.max_retries, office["text"]
-            )
-            return _scrape_regional_office(page, office, attempt + 1)
-
-        logger.exception(
-            "Regional %s failed after %d attempts", office["text"], SCRAPING.max_retries
-        )
-        return []
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -77,14 +82,33 @@ def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[Vacancy]:
             clear_screen()
             print_section(f"Vacantes MEP — {total} direcciones regionales")
 
+            permanent_failures = 0
+
             for index, office in enumerate(offices, start=1):
-                vacancies = _scrape_regional_office(page, office)
+                try:
+                    vacancies = _scrape_regional_office(page, office)
+
+                except PermanentScrapingError:
+                    permanent_failures += 1
+                    logger.exception("Office %s: page structure changed", office["text"])
+                    vacancies = []
+
+                    # Every office failing the same way means the site changed,
+                    # not that this run was unlucky. Continuing would produce an
+                    # empty workbook that looks like a legitimate result.
+                    if permanent_failures == total:
+                        raise
+
                 all_vacancies.extend(vacancies)
 
                 print_progress(index, total, office["text"], len(vacancies))
-                logger.info(f"{office['text']}: {len(vacancies)} vacantes encontradas.")
+                logger.info(
+                    "%s: %d vacantes encontradas.", office["text"], len(vacancies)
+                )
 
-            logger.info(f"Total: {len(all_vacancies)} vacantes encontradas.")
+        except PermanentScrapingError:
+            logger.exception("All %d offices failed; the site structure changed", total)
+            raise
 
         except Exception:
             logger.exception("Fatal error in scrape_all_vacancies")
@@ -92,6 +116,7 @@ def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[Vacancy]:
         finally:
             browser.close()
 
+    print_section(f"Total: {len(all_vacancies)} vacantes encontradas.")
     logger.info(f"Total: {len(all_vacancies)} vacancies found.")
     return all_vacancies
 
