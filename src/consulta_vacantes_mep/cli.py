@@ -1,6 +1,6 @@
 from consulta_vacantes_mep.exports.excel import export_data_to_excel
 from consulta_vacantes_mep.labels import appointment_to_row, vacancy_to_row
-from consulta_vacantes_mep.models import Appointment, Vacancy
+from consulta_vacantes_mep.models import Appointment, QueryOutcome, Vacancy
 from consulta_vacantes_mep.scrapers.appointments import scrape_appointments_for_vacancies
 from consulta_vacantes_mep.scrapers.vacancies import (
     filter_vacancies_by_specialty,
@@ -67,7 +67,7 @@ def ask_export_to_excel(
         print(file_path)
 
 
-def main():
+def main() -> None:  # noqa: PLR0912  # TODO(stage-6): split into command handlers
     configure_logging()
 
     if not ensure_chromium_installed():
@@ -88,13 +88,21 @@ def main():
             year = ask_year()
             print("\nConsultando nombramientos...")
 
-            appointments = scrape_appointments_for_vacancies(
-                vacancies,
-                year=year,
-                headless=True
+            queries = scrape_appointments_for_vacancies(
+                vacancies, year=year, headless=True
             )
 
+            appointments = [a for q in queries for a in q.appointments]
+            failed = [q for q in queries if q.outcome is QueryOutcome.FAILED]
+
             print_appointments(appointments)
+
+            if failed:
+                print(f"\n⚠  {len(failed)} vacantes no se pudieron consultar:")
+                for query in failed[:10]:
+                    print(f"   {query.vacancy_number}")
+                if len(failed) > 10:
+                    print(f"   ... y {len(failed) - 10} más")
 
             ask_export_to_excel(
                 vacancies,
@@ -127,13 +135,21 @@ def main():
             year = ask_year()
             print("\nConsultando nombramientos...")
 
-            appointments = scrape_appointments_for_vacancies(
-                filtered_vacancies,
-                year=year,
-                headless=True
+            queries = scrape_appointments_for_vacancies(
+                filtered_vacancies, year=year, headless=True
             )
 
+            appointments = [a for q in queries for a in q.appointments]
+            failed = [q for q in queries if q.outcome is QueryOutcome.FAILED]
+
             print_appointments(appointments)
+
+            if failed:
+                print(f"\n⚠  {len(failed)} vacantes no se pudieron consultar:")
+                for query in failed[:10]:
+                    print(f"   {query.vacancy_number}")
+                if len(failed) > 10:
+                    print(f"   ... y {len(failed) - 10} más")
 
             ask_export_to_excel(
                 filtered_vacancies,
