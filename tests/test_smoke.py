@@ -8,6 +8,6 @@ def test_package_exposes_version() -> None:
 
 
 def test_entry_point_is_importable() -> None:
-    from consulta_vacantes_mep.cli import main
+    from consulta_vacantes_mep.cli import main  # noqa: PLC0415
 
     assert callable(main)

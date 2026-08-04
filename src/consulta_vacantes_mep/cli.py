@@ -1,13 +1,13 @@
-from datetime import datetime
-
 from consulta_vacantes_mep.exports.excel import export_data_to_excel
 from consulta_vacantes_mep.scrapers.appointments import scrape_appointments_for_vacancies
 from consulta_vacantes_mep.scrapers.vacancies import (
     filter_vacancies_by_specialty,
     scrape_all_vacancies,
 )
-from consulta_vacantes_mep.utils.menu import show_welcome_menu
+from consulta_vacantes_mep.utils.logger import configure_logging
+from consulta_vacantes_mep.utils.menu import ask_year, show_welcome_menu
 from consulta_vacantes_mep.utils.playwright_setup import ensure_chromium_installed
+
 
 def print_vacancies(vacancies):
     if not vacancies:
@@ -69,27 +69,13 @@ def ask_export_to_excel(
         print("\nArchivo Excel generado correctamente:")
         print(file_path)
 
-def ask_appointments_year():
-    current_year = str(datetime.now().year)
-
-    year = input(
-        f"\nIngrese el año para consultar nombramientos "
-        f"[Enter = {current_year}]: "
-    ).strip()
-
-    if not year:
-        return current_year
-
-    if not year.isdigit():
-        print(f"\nAño inválido. Se utilizará {current_year}.")
-        return current_year
-
-    return year
 
 def main():
+    configure_logging()
+
     if not ensure_chromium_installed():
         return
-    
+
     while True:
         option = show_welcome_menu()
 
@@ -102,7 +88,7 @@ def main():
 
             # print_vacancies(vacancies)
 
-            year = ask_appointments_year()
+            year = ask_year()
             print("\nConsultando nombramientos...")
 
             appointments = scrape_appointments_for_vacancies(
@@ -141,7 +127,7 @@ def main():
 
             # print_vacancies(filtered_vacancies)
 
-            year = ask_appointments_year()
+            year = ask_year()
             print("\nConsultando nombramientos...")
 
             appointments = scrape_appointments_for_vacancies(

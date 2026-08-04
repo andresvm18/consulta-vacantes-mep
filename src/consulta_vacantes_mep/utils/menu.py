@@ -1,15 +1,14 @@
-import sys
-
+from consulta_vacantes_mep.settings import default_year
 from consulta_vacantes_mep.utils.console import clear_screen
+
+MIN_YEAR = 2000
+MAX_YEAR = 2100
 
 MENU_OPTIONS = {
     "1": "Buscar todas las especialidades",
     "2": "Buscar especialidad por nombre",
     "3": "Salir",
 }
-
-DEFAULT_YEAR = "2026"
-
 
 def _divider(char="─", width=52):
     return char * width
@@ -45,16 +44,18 @@ def show_welcome_menu() -> str:
         print(f"\n  ✗  Opción inválida: «{choice}». Intente de nuevo.")
 
 
-def ask_year() -> str:
-    """Prompt for a consultation year; returns DEFAULT_YEAR if input is empty or invalid."""
+def ask_year() -> int:
+    """Prompt for a query year, falling back to the current one."""
+    fallback = default_year()
+
     print()
-    year = input(f"  Año de consulta [{DEFAULT_YEAR}]: ").strip()
+    raw = input(f"  Año de consulta [{fallback}]: ").strip()
 
-    if not year:
-        return DEFAULT_YEAR
+    if not raw:
+        return fallback
 
-    if not year.isdigit() or not (2000 <= int(year) <= 2099):
-        print(f"  ✗  Año inválido. Se usará {DEFAULT_YEAR}.")
-        return DEFAULT_YEAR
+    if not raw.isdigit() or not (MIN_YEAR <= int(raw) <= MAX_YEAR):
+        print(f"  ✗  Año inválido. Se usará {fallback}.")
+        return fallback
 
-    return year
+    return int(raw)

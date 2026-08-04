@@ -1,17 +1,12 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from playwright.sync_api import sync_playwright
 
+from consulta_vacantes_mep.settings import SCRAPING
 from consulta_vacantes_mep.utils.console import clear_screen, print_result, print_section
-from consulta_vacantes_mep.utils.logger import write_error, write_log
+from consulta_vacantes_mep.utils.logger import get_logger
 
-APPOINTMENTS_URL = "https://apps.mep.go.cr/consultanombramientos/"
-
-MAX_WORKERS = 10
-MAX_RETRIES = 3
-CELL_TIMEOUT_MS = 3_000
-PAGE_LOAD_TIMEOUT_MS = 60_000
-POSTBACK_SETTLE_MS = 1_000
-POSTBACK_TIMEOUT_MS = 8_000
+logger = get_logger(__name__)
 
 APPOINTMENT_COLUMNS = [
     "Vacante",
@@ -46,9 +41,9 @@ def _extract_appointments_from_table(page) -> list[dict]:
 
         for j in range(columns.count()):
             try:
-                text = columns.nth(j).inner_text(timeout=CELL_TIMEOUT_MS).strip()
-            except Exception as error:
-                write_error(f"Error reading appointment table cell: {error}")
+                text = columns.nth(j).inner_text(timeout=SCRAPING.cell_timeout_ms).strip()
+            except Exception:
+                logger.exception("Error reading appointment table cell")
                 continue
 
             if text:
@@ -57,20 +52,29 @@ def _extract_appointments_from_table(page) -> list[dict]:
         data = data[:13]
 
         if len(data) == 13:
-            appointments.append(dict(zip(APPOINTMENT_COLUMNS, data)))
+            appointments.append(dict(zip(APPOINTMENT_COLUMNS, data, strict=True)))
 
     return appointments
 
 
-def _search_single_appointment(vacancy_number: str, year: str = "2026", headless: bool = True, attempt: int = 1) -> list[dict]:
-    """Fetch appointments for one vacancy number, retrying up to MAX_RETRIES times."""
+def _search_single_appointment(
+    vacancy_number: str,
+    year: int,
+    headless: bool = SCRAPING.headless,
+    attempt: int = 1,
+) -> list[dict]:
+    """Fetch appointments for one vacancy number, retrying on failure."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
         page = browser.new_page()
 
         try:
-            page.goto(APPOINTMENTS_URL, wait_until="domcontentloaded", timeout=PAGE_LOAD_TIMEOUT_MS)
-            page.wait_for_timeout(POSTBACK_SETTLE_MS)
+            page.goto(
+                SCRAPING.appointments_url,
+                wait_until="domcontentloaded",
+                timeout=SCRAPING.page_load_timeout_ms,
+            )
+            page.wait_for_timeout(SCRAPING.settle_ms)
 
             page.locator("#radioVacante").check()
             page.locator("#txtCedula").fill(str(vacancy_number))
@@ -78,27 +82,46 @@ def _search_single_appointment(vacancy_number: str, year: str = "2026", headless
             page.evaluate("__doPostBack('btnConsultar','')")
 
             try:
-                page.wait_for_load_state("domcontentloaded", timeout=POSTBACK_TIMEOUT_MS)
+                page.wait_for_load_state(
+                    "domcontentloaded", timeout=SCRAPING.postback_timeout_ms
+                )
             except Exception:
-                pass
+                logger.warning(
+                    "Vacancy %s: postback did not settle within %dms",
+                    vacancy_number,
+                    SCRAPING.postback_timeout_ms,
+                )
 
-            page.wait_for_timeout(POSTBACK_SETTLE_MS)
+            page.wait_for_timeout(SCRAPING.settle_ms)
 
             if page.locator("table").count() == 0:
-                write_log(f"Vacancy {vacancy_number}: no appointments found.")
+                logger.info("Vacancy %s: no appointments found.", vacancy_number)
                 return []
 
             appointments = _extract_appointments_from_table(page)
-            write_log(f"Vacancy {vacancy_number}: {len(appointments)} appointments found.")
+            logger.info(
+                "Vacancy %s: %d appointments found.", vacancy_number, len(appointments)
+            )
             return appointments
 
-        except Exception as error:
-            if attempt < MAX_RETRIES:
-                write_log(f"Retry {attempt}/{MAX_RETRIES} for vacancy {vacancy_number}")
+        except Exception:
+            if attempt < SCRAPING.max_retries:
+                logger.warning(
+                    "Retry %d/%d for vacancy %s",
+                    attempt,
+                    SCRAPING.max_retries,
+                    vacancy_number,
+                )
                 browser.close()
-                return _search_single_appointment(vacancy_number, year, headless, attempt + 1)
+                return _search_single_appointment(
+                    vacancy_number, year, headless, attempt + 1
+                )
 
-            write_error(f"Vacancy {vacancy_number} failed after {MAX_RETRIES} attempts: {error}")
+            logger.exception(
+                "Vacancy %s failed after %d attempts",
+                vacancy_number,
+                SCRAPING.max_retries,
+            )
             raise
 
         finally:
@@ -106,8 +129,11 @@ def _search_single_appointment(vacancy_number: str, year: str = "2026", headless
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
-
-def scrape_appointments_for_vacancies(vacancies: list[dict], year: str = "2026", headless: bool = True) -> list[dict]:
+def scrape_appointments_for_vacancies(
+    vacancies: list[dict],
+    year: int,
+    headless: bool = SCRAPING.headless,
+) -> list[dict]:
     if not vacancies:
         return []
 
@@ -116,12 +142,13 @@ def scrape_appointments_for_vacancies(vacancies: list[dict], year: str = "2026",
 
     clear_screen()
     print_section(
-        f"Nombramientos MEP — {total} vacantes únicas  ·  {MAX_WORKERS} consultas simultáneas"
+        f"Nombramientos MEP — {total} vacantes únicas  ·  "
+        f"{SCRAPING.max_concurrency} consultas simultáneas"
     )
 
     all_appointments = []
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    with ThreadPoolExecutor(max_workers=SCRAPING.max_concurrency) as executor:
         futures = {
             executor.submit(_search_single_appointment, vn, year, headless): vn
             for vn in vacancy_numbers
@@ -135,9 +162,9 @@ def scrape_appointments_for_vacancies(vacancies: list[dict], year: str = "2026",
                 print_result(index, total, vacancy_number, len(result))
                 all_appointments.extend(result)
 
-            except Exception as error:
+            except Exception:
                 print_result(index, total, vacancy_number, None)
-                write_error(f"Error fetching vacancy {vacancy_number}: {error}")
+                logger.exception("Error fetching vacancy %s", vacancy_number)
 
     print_section(f"Total: {len(all_appointments)} nombramientos encontrados.")
     return all_appointments

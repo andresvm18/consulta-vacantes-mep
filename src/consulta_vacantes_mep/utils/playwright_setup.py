@@ -1,5 +1,6 @@
 import subprocess
 import sys
+
 from playwright.sync_api import sync_playwright
 
 
@@ -13,13 +14,12 @@ def ensure_chromium_installed():
 
     except Exception as error:
         if getattr(sys, "frozen", False):
-            print("\nNo se encontró Chromium dentro del ejecutable.")
-            print("Debe generarse el .exe incluyendo los navegadores de Playwright.")
-            print(f"\nDetalle: {error}")
+            print("Playwright Chromium no está instalado y no se puede instalar automáticamente desde un ejecutable empaquetado.")
+            print("El ejecutable debe construirse con los navegadores de Playwright incluidos.")
+            print(f"Detalles: {error}")
             return False
 
-        print("\nChromium de Playwright no está instalado.")
-        print("Instalando Chromium automáticamente...")
+        print("Playwright Chromium no está instalado. Instalándolo automáticamente...")
 
         try:
             subprocess.run(
@@ -28,9 +28,8 @@ def ensure_chromium_installed():
             )
             return True
 
-        except Exception as install_error:
-            print("\nNo se pudo instalar Chromium automáticamente.")
-            print("Ejecute manualmente:")
+        except Exception:
+            print("Error al instalar Playwright Chromium automáticamente.")
+            print("Por favor, instálalo manualmente:")
             print("python -m playwright install chromium")
-            print(f"\nDetalle: {install_error}")
             return False

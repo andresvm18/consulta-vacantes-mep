@@ -8,7 +8,7 @@ name = "consulta-vacantes-mep"
 version = "0.3.0"
 description = "Consulta vacantes y nombramientos docentes publicados por el MEP de Costa Rica"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Andres Viquez Marchena" }]
 keywords = ["scraping", "playwright", "costa-rica", "education", "job-vacancies"]
@@ -18,7 +18,6 @@ classifiers = [
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: Apache Software License",
     "Natural Language :: Spanish",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: WWW/HTTP :: Browsers",
@@ -73,7 +72,7 @@ include = [
 # ─────────────────────────────────────────────────────────────────────────────
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
@@ -135,7 +134,7 @@ convention = "google"
 #  Mypy: chequeo estatico de tipos
 # ─────────────────────────────────────────────────────────────────────────────
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 files = ["src", "tests"]
 warn_return_any = true
 warn_unused_configs = true

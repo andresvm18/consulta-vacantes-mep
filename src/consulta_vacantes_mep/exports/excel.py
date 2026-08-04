@@ -4,18 +4,22 @@ import pandas as pd
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from consulta_vacantes_mep.settings import EXPORT
+from consulta_vacantes_mep.utils.logger import get_logger
 from consulta_vacantes_mep.utils.paths import OUTPUT_DIR
+
+logger = get_logger(__name__)
 
 
 def format_worksheet(worksheet):
     header_fill = PatternFill(
-        start_color="1F4E78",
-        end_color="1F4E78",
-        fill_type="solid"
+        start_color=EXPORT.header_fill_color,
+        end_color=EXPORT.header_fill_color,
+        fill_type="solid",
     )
 
     header_font = Font(
-        color="FFFFFF",
+        color=EXPORT.header_font_color,
         bold=True
     )
 
@@ -35,7 +39,7 @@ def format_worksheet(worksheet):
             if cell.value:
                 max_length = max(max_length, len(str(cell.value)))
 
-        adjusted_width = min(max_length + 2, 45)
+        adjusted_width = min(max_length + 2, EXPORT.max_column_width)
         worksheet.column_dimensions[column_letter].width = adjusted_width
 
 
@@ -45,12 +49,12 @@ def export_data_to_excel(
     filename_prefix="vacantes"
 ):
     if not vacancies:
-        print("\nNo hay datos para exportar.")
+        logger.warning("No vacancies to export; skipping workbook creation.")
         return None
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    timestamp = datetime.now().strftime(EXPORT.timestamp_format)
     filename = f"{filename_prefix}_{timestamp}.xlsx"
     file_path = OUTPUT_DIR / filename
 

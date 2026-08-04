@@ -1,10 +1,11 @@
 from playwright.sync_api import sync_playwright
 
+from consulta_vacantes_mep.settings import SCRAPING
 from consulta_vacantes_mep.utils.console import clear_screen, print_progress, print_section
-from consulta_vacantes_mep.utils.logger import write_error, write_log
+from consulta_vacantes_mep.utils.logger import get_logger
 from consulta_vacantes_mep.utils.text import normalize_text
 
-VACANCIES_URL = "https://apps.mep.go.cr/formulario"
+logger = get_logger(__name__)
 
 VACANCY_COLUMNS = [
     "Vacante",
@@ -16,16 +17,6 @@ VACANCY_COLUMNS = [
     "Rige",
     "Vence",
 ]
-
-MAX_RETRIES = 3
-ROW_TIMEOUT_MS = 3_000
-PAGE_LOAD_TIMEOUT_MS = 60_000
-SELECTOR_TIMEOUT_MS = 8_000
-SETTLE_MS = 1_500
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
 
 # ── Extraction ────────────────────────────────────────────────────────────────
 
@@ -58,9 +49,9 @@ def _extract_vacancies_from_table(page) -> list[dict]:
 
         for j in range(columns.count()):
             try:
-                text = columns.nth(j).inner_text(timeout=ROW_TIMEOUT_MS).strip()
+                text = columns.nth(j).inner_text(timeout=SCRAPING.cell_timeout_ms).strip()
             except Exception as error:
-                write_error(f"Error reading vacancy table cell: {error}")
+                logger.exception(f"Error reading vacancy table cell: {error}")
                 continue
 
             if text.upper() == "APLICAR":
@@ -71,7 +62,7 @@ def _extract_vacancies_from_table(page) -> list[dict]:
         data = data[:8]
 
         if len(data) == 8:
-            vacancies.append(dict(zip(VACANCY_COLUMNS, data)))
+            vacancies.append(dict(zip(VACANCY_COLUMNS, data, strict=True)))
 
     return vacancies
 
@@ -82,25 +73,31 @@ def _scrape_regional_office(page, office: dict, attempt: int = 1) -> list[dict]:
         page.locator("select").first.select_option(office["value"])
 
         try:
-            page.wait_for_selector("table tr td", timeout=SELECTOR_TIMEOUT_MS)
-            page.wait_for_timeout(SETTLE_MS)
+            page.wait_for_selector("table tr td", timeout=SCRAPING.selector_timeout_ms)
+            page.wait_for_timeout(SCRAPING.settle_ms)
         except Exception:
+            logger.warning("No result table for %s within timeout", office["text"])
             return []
 
         return _extract_vacancies_from_table(page)
 
-    except Exception as error:
-        if attempt < MAX_RETRIES:
-            write_log(f"Retry {attempt}/{MAX_RETRIES} for {office['text']}")
+    except Exception:
+        if attempt < SCRAPING.max_retries:
+            logger.warning(
+                "Retry %d/%d for %s", attempt, SCRAPING.max_retries, office["text"]
+            )
             return _scrape_regional_office(page, office, attempt + 1)
 
-        write_error(f"Regional {office['text']} failed after {MAX_RETRIES} attempts: {error}")
+        logger.exception(
+            "Regional %s failed after %d attempts",
+            office["text"],
+            SCRAPING.max_retries,
+        )
         return []
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
-
-def scrape_all_vacancies(headless: bool = True) -> list[dict]:
+def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[dict]:
     all_vacancies = []
 
     with sync_playwright() as p:
@@ -108,7 +105,7 @@ def scrape_all_vacancies(headless: bool = True) -> list[dict]:
         page = browser.new_page()
 
         try:
-            page.goto(VACANCIES_URL, wait_until="domcontentloaded", timeout=PAGE_LOAD_TIMEOUT_MS)
+            page.goto(SCRAPING.vacancies_url, wait_until="domcontentloaded", timeout=SCRAPING.page_load_timeout_ms)
             page.wait_for_timeout(3_000)
 
             offices = _get_regional_offices(page)
@@ -122,18 +119,17 @@ def scrape_all_vacancies(headless: bool = True) -> list[dict]:
                 all_vacancies.extend(vacancies)
 
                 print_progress(index, total, office["text"], len(vacancies))
-                write_log(f"{office['text']}: {len(vacancies)} vacantes encontradas.")
+                logger.info(f"{office['text']}: {len(vacancies)} vacantes encontradas.")
 
-            print()  # newline after progress bar
+            logger.info(f"Total: {len(all_vacancies)} vacantes encontradas.")
 
-        except Exception as error:
-            print("\n  ✗ Error general consultando vacantes.")
-            write_error(f"Fatal error in scrape_all_vacancies: {error}")
+        except Exception:
+            logger.exception("Fatal error in scrape_all_vacancies")
 
         finally:
             browser.close()
 
-    print_section(f"Total: {len(all_vacancies)} vacantes encontradas.")
+    logger.info(f"Total: {len(all_vacancies)} vacancies found.")
     return all_vacancies
 
 

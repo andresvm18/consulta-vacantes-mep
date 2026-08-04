@@ -40,8 +40,10 @@ Baseline snapshot of the pre-modernization codebase, tagged as `v0.3.0-legacy`.
 - Appointment rows containing an empty cell are silently discarded.
 - Postback timeouts are swallowed, so a slow response is reported as "no
   appointments found" and is indistinguishable from a genuine empty result.
-  Baseline run on 2026-08-03 returned 1 appointment across 66 vacancies; this
-  figure is unverified.
+  A run on 2026-08-03 with timeout logging enabled produced zero timeout
+  warnings, and one vacancy returned an appointment, indicating the query
+  path works and the low match rate reflects open vacancies that have not yet
+  been filled. The error handling still needs to distinguish the two cases.
 - Vacancy results are not cached between menu selections, so consecutive
   searches re-scrape all regional offices.
 - One Chromium instance is launched per vacancy number, costing roughly 80
