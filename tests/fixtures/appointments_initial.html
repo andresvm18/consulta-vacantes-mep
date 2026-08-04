@@ -1,0 +1,228 @@
+<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>
+	Ministerio de Educación Pública.- Consulta de Nombramientos
+</title>
+
+    <script src="Scripts/jquery-3.7.1.min.js"></script>
+    <link href="./Content/bootstrap.min.css" rel="stylesheet"><link href="Content/toastr.min.css" rel="stylesheet"><link href="Content/sweetalert2.min.css" rel="stylesheet"><link href="Content/fontawesome/css/fontawesome.min.css" rel="stylesheet"><link href="Content/fontawesome/css/regular.min.css" rel="stylesheet"><link rel="Stylesheet" type="text/css" href="Estilos.css"><link rel="shortcut icon" href="/Imagenes/favicon.ico" type="image/x-icon">
+
+    <style>
+        .navbar-brand img {
+            max-width: 100%;
+            height: auto;
+            width: 300px; /* Ajustable según necesidad */
+            margin-right: inherit;
+        }
+    </style>
+
+</head>
+<body class="d-flex flex-column min-vh-100">
+    <!-- Header -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand ml-auto" href="#" data-asw-orgfontsize="20" style="font-size: 20px;">
+                <img src="./Content/Imagenes/meplogoOscuro.png" alt="Logo" width="30" height="30" class="d-inline-block align-text-top">
+                Consulta de Nombramientos
+            </a>
+        </div>
+    </nav>
+    <!-- Content -->
+    <div class="container my-4">
+        <div class="row ">
+            <div class="col-md-12">
+                <article>
+                    <form method="post" action="./" id="form1">
+<div class="aspNetHidden">
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="">
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="">
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="REDACTED">
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['form1'];
+if (!theForm) {
+    theForm = document.form1;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<script src="/ConsultaNombramientos/WebResource.axd?d=uIl5MjS34PX133mokmdr1PIpFMR0kOLJ7oyjmRXcQLw5KTLqO3aM_4iTo45vIXJpwSjycTEBE9MMm6z0F2WJRGWLdeuelvUw2BSdnwgRjFQ1&amp;t=638901310312636832" type="text/javascript"></script>
+
+
+<script src="/ConsultaNombramientos/ScriptResource.axd?d=1g0Kmomq7MbaHwJ5F1z7fPxyq_tG6zPe4KoKZQu_g1cOmJ-ihlS6Bos_IOi354NFo027CfDmwIzA1y401x8ioIUmNNqVuffOcCcJgbkqGPRQVYeqpfwWNRhnUDpnqa1yKQUdlGBJJlgPCcCg1cN0hyRkulfDu8sNC2LPdgM3JBA1&amp;t=345ad968" type="text/javascript"></script>
+<script src="/ConsultaNombramientos/ScriptResource.axd?d=wZjGCX5VKICT9xV-9fopjX_B69H5K2en_d8WbUmoi9WCGyMMOzZLHM4PhoVyJ1_oEJj_C1ZjBhg7kMXdAvMUphRuWAwnW0d-kO2aBUsrxc-u5u9GFMS1YMk5l8pJ7oBkbnWaQ9SseCk3k5wRcE6q0G33CgdW3wewYOAyo67QLDJZTkr8ve03sm4r55x78XRA0&amp;t=345ad968" type="text/javascript"></script>
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="REDACTED">
+	<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="REDACTED">
+</div>
+                        <script type="text/javascript">
+//<![CDATA[
+Sys.WebForms.PageRequestManager._initialize('ScriptManager1', 'form1', ['tUpdatePanel1',''], [], [], 90, '');
+//]]>
+</script>
+
+
+                        
+                        <span id="UpdatePanel1" class="min-vh-100" data-asw-orgfontsize="16" style="font-size: 16px;">
+                                <div class="form-row g-2">
+                                    <div class="col-md-8 col-sm-12">
+                                        <label class="form-label mr-4"><strong>Criterio de Búsqueda:</strong></label>
+                                        <div class="input-group mb-3 form-group">
+
+                                            <div class="form-check form-check-inline">
+                                                <input value="identificacion" name="tipoBusqueda" type="radio" id="radioIdentificacion" class="form-check-input" checked="checked" onchange="actualizarPlaceholder()">
+                                                <label class="form-check-label" for="radioIdentificacion">Identificación</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input value="vacante" name="tipoBusqueda" type="radio" id="radioVacante" class="form-check-input" onchange="actualizarPlaceholder()">
+                                                <label class="form-check-label" for="radioVacante">Número de Vacante</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row g-2 mr-2">
+
+                                    <div class="col-md-6 col-sm-12 d-block">
+
+                                        <label id="labelBusqueda" for="inputBusqueda" class="form-label">Cédula de Identidad</label>
+                                        <input name="txtCedula" type="text" id="txtCedula" class="form-control" aria-label="Cedula de Identidad formato 9 dígitos" placeholder="Formato: 000000000">
+
+
+                                    </div>
+                                    <div class="col-12 col-md-2 col-sm-12 d-block">
+
+                                        <label for="ddlAño" class="form-label">Año</label>
+                                        <select name="ddlAño" id="ddlAño" title="Año en que se desea buscar el nombramiento..." class="form-control form-select" role="select" aria-label="Año del Nombramiento">
+	<option value="2031">2031</option>
+	<option value="2028">2028</option>
+	<option value="2027">2027</option>
+	<option selected="selected" value="2026">2026</option>
+	<option value="2025">2025</option>
+	<option value="2024">2024</option>
+	<option value="2023">2023</option>
+	<option value="2022">2022</option>
+	<option value="2021">2021</option>
+	<option value="2020">2020</option>
+	<option value="2019">2019</option>
+	<option value="2018">2018</option>
+	<option value="2017">2017</option>
+	<option value="2016">2016</option>
+	<option value="2015">2015</option>
+	<option value="2014">2014</option>
+	<option value="2013">2013</option>
+	<option value="2012">2012</option>
+	<option value="2011">2011</option>
+	<option value="2010">2010</option>
+	<option value="2009">2009</option>
+	<option value="2008">2008</option>
+	<option value="2007">2007</option>
+	<option value="2006">2006</option>
+	<option value="2002">2002</option>
+	<option value="2001">2001</option>
+	<option value="2000">2000</option>
+
+</select>
+
+
+                                    </div>
+                                    <div class="col-12 col-md-4 col-sm-12 align-self-end">
+
+                                        <div>
+                                            
+                                            <a id="btnConsultar" class="btn btn-primary mt-2 w-100 mt-2" href="javascript:__doPostBack('btnConsultar','')" data-asw-orgfontsize="16" style="font-size: 16px;">Consultar</a>
+                                        </div>
+
+                                    </div>
+                                </div>
+                                <div class="form-row g-2 mt-12 col-sm-12 mt-4">
+                                    <div class="col-md-12 p-2">
+                                        <div id="Panel1" class="ubicarpanel">
+	
+                                            <div class="table-responsive">
+                                                <div>
+
+	</div>
+                                            </div>
+                                        
+</div>
+                                    </div>
+                                </div>
+
+                            </span>
+                    </form>
+                </article>
+            </div>
+        </div>
+    </div>
+    <!-- Footer -->
+    <footer class="bg-secondary text-center py-2 mt-auto">
+        <b>
+            <p data-asw-orgfontsize="16" style="font-size: 16px;">© 2026 - Ministerio de Educación Pública</p>
+        </b>
+    </footer>
+    <script src="Scripts/bootstrap.min.js"></script>
+    <script src="Scripts/sienna.min.js" defer=""></script>
+    <script>
+        function actualizarPlaceholder() {
+            var tipoBusqueda = document.querySelector('input[name="tipoBusqueda"]:checked').value;
+            var inputBusqueda = document.getElementById("txtCedula");
+            var labelBusqueda = document.getElementById("labelBusqueda");
+
+
+            if (tipoBusqueda === "identificacion") {
+                labelBusqueda.innerText = "Cédula de Identidad";
+                inputBusqueda.setAttribute("aria-label", "Digite su Cedula en formato de 9 digitos");
+                inputBusqueda.placeholder = "Formato: 000000000";
+                limpiarGridView('grvNombramientos');
+
+             } else {
+                 labelBusqueda.innerText = "Número de Vacante";
+                 inputBusqueda.placeholder = "Ingrese Número de Vacante";
+                 inputBusqueda.setAttribute("aria-label", "Digite el número de vacante");
+                 limpiarGridView('grvNombramientos');
+            }
+        }
+
+        function limpiarGridView(gridId) {
+            var grid = document.getElementById(gridId);
+
+            if (!grid) return;
+
+            while (grid.rows.length > 1) {
+                grid.deleteRow(1);
+            }
+        }
+
+        $(document).ready(function () {
+
+            $("#btnConsultar").click(function () {
+
+                console.log("registro");
+                // Deshabilita el boton
+                $(this).prop("disabled", true);
+
+                /* Agrega el spinner al botón */
+                $(this).html(
+                    `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Consultando...`
+
+                );
+
+            });
+        });
+
+
+    </script>
+
+
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a25a3b35a922e833',t:'MTc4NTgxMTU4Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><iframe height="1" width="1" style="position: absolute; top: 0px; left: 0px; border-width: medium; border-style: none; border-color: currentcolor; border-image: none; visibility: hidden;"></iframe>
+
+<div class="asw-container"><style>.asw-menu,.asw-widget{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;font-weight:400;-webkit-font-smoothing:antialiased}.asw-menu *,.asw-widget *{box-sizing:border-box!important}.asw-menu-btn{position:fixed;z-index:500000;left:30px;bottom:30px;box-shadow:0 5px 15px 0 rgb(37 44 97 / 15%),0 2px 4px 0 rgb(93 100 148 / 20%);transition:transform .2s ease;border-radius:50%;align-items:center;justify-content:center;width:58px;height:58px;display:flex;cursor:pointer;border:3px solid #fff!important;outline:5px solid #0048ff!important;text-decoration:none!important;background:#326cff!important;background:linear-gradient(96deg,#326cff 0,#0048ff 100%)!important}.asw-menu-btn svg{width:36px;height:36px;min-height:36px;min-width:36px;max-width:36px;max-height:36px;background:0 0!important}.asw-menu-btn:hover{transform:scale(1.05)}@media only screen and (max-width:768px){.asw-menu-btn{width:42px;height:42px}.asw-menu-btn svg{width:26px;height:26px;min-height:26px;min-width:26px;max-width:26px;max-height:26px}}</style> <div class="asw-widget"> <a href="#" target="_blank" class="asw-menu-btn" title="Open Accessibility Menu" role="button" aria-expanded="false" data-translate="Open Accessibility Menu" style="left: auto; bottom: 20px; right: 20px;"> <svg xmlns="http://www.w3.org/2000/svg" style="fill:white" viewBox="0 0 24 24" width="30px" height="30px"><path d="M0 0h24v24H0V0z" fill="none"></path><path d="M20.5 6c-2.61.7-5.67 1-8.5 1s-5.89-.3-8.5-1L3 8c1.86.5 4 .83 6 1v13h2v-6h2v6h2V9c2-.17 4.14-.5 6-1l-.5-2zM12 6c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"></path></svg> </a> </div></div></body></html>

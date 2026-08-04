@@ -125,6 +125,7 @@ ignore = [
 "src/consulta_vacantes_mep/utils/console.py" = ["T20"]
 "src/consulta_vacantes_mep/utils/menu.py" = ["T20"]
 "tests/**" = ["S", "PLR2004"]
+"scripts/**" = ["T201"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
