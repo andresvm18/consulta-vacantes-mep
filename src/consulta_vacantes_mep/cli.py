@@ -1,4 +1,6 @@
 from consulta_vacantes_mep.exports.excel import export_data_to_excel
+from consulta_vacantes_mep.labels import appointment_to_row, vacancy_to_row
+from consulta_vacantes_mep.models import Appointment, Vacancy
 from consulta_vacantes_mep.scrapers.appointments import scrape_appointments_for_vacancies
 from consulta_vacantes_mep.scrapers.vacancies import (
     filter_vacancies_by_specialty,
@@ -9,7 +11,7 @@ from consulta_vacantes_mep.utils.menu import ask_year, show_welcome_menu
 from consulta_vacantes_mep.utils.playwright_setup import ensure_chromium_installed
 
 
-def print_vacancies(vacancies):
+def print_vacancies(vacancies: list[Vacancy]) -> None:
     if not vacancies:
         print("\nNo se encontraron vacantes.")
         return
@@ -20,17 +22,12 @@ def print_vacancies(vacancies):
 
     for vacancy in vacancies:
         print("\n----------------------------------------")
-        print(f"Vacante: {vacancy['Vacante']}")
-        print(f"Dirección Regional: {vacancy['Dirección Regional']}")
-        print(f"Clase de Puesto: {vacancy['Clase de Puesto']}")
-        print(f"Especialidad: {vacancy['Especialidad']}")
-        print(f"Institución: {vacancy['Institución']}")
-        print(f"Lecciones: {vacancy['Lecciones']}")
-        print(f"Rige: {vacancy['Rige']}")
-        print(f"Vence: {vacancy['Vence']}")
+
+        for label, value in vacancy_to_row(vacancy).items():
+            print(f"{label}: {value}")
 
 
-def print_appointments(appointments):
+def print_appointments(appointments: list[Appointment]) -> None:
     if not appointments:
         print("\nNo se encontraron nombramientos.")
         return
@@ -42,8 +39,8 @@ def print_appointments(appointments):
     for appointment in appointments:
         print("\n----------------------------------------")
 
-        for key, value in appointment.items():
-            print(f"{key}: {value}")
+        for label, value in appointment_to_row(appointment).items():
+            print(f"{label}: {value}")
 
 
 def ask_export_to_excel(

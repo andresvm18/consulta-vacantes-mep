@@ -1,9 +1,12 @@
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from consulta_vacantes_mep.labels import appointment_to_row, vacancy_to_row
+from consulta_vacantes_mep.models import Appointment, Vacancy
 from consulta_vacantes_mep.settings import EXPORT
 from consulta_vacantes_mep.utils.logger import get_logger
 from consulta_vacantes_mep.utils.paths import OUTPUT_DIR
@@ -44,22 +47,24 @@ def format_worksheet(worksheet):
 
 
 def export_data_to_excel(
-    vacancies,
-    appointments=None,
-    filename_prefix="vacantes"
-):
+    vacancies: list[Vacancy],
+    appointments: list[Appointment] | None = None,
+    filename_prefix: str = "vacantes",
+) -> Path | None:
     if not vacancies:
         logger.warning("No vacancies to export; skipping workbook creation.")
         return None
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now().strftime(EXPORT.timestamp_format)
+    timestamp = datetime.now().astimezone().strftime(EXPORT.timestamp_format)
     filename = f"{filename_prefix}_{timestamp}.xlsx"
     file_path = OUTPUT_DIR / filename
 
-    vacancies_df = pd.DataFrame(vacancies)
-    appointments_df = pd.DataFrame(appointments if appointments else [])
+    vacancies_df = pd.DataFrame([vacancy_to_row(v) for v in vacancies])
+    appointments_df = pd.DataFrame(
+        [appointment_to_row(a) for a in appointments or []]
+    )
 
     with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
         vacancies_df.to_excel(
