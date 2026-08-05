@@ -23,7 +23,9 @@ def _select_office(page: Page, office: dict) -> None:
     table = page.locator(VACANCIES_TABLE_SELECTOR)
 
     try:
-        previous = table.locator("tbody").text_content() or ""
+        previous = table.locator("tbody").text_content(
+            timeout=SCRAPING.cell_timeout_ms
+        ) or ""
     except PlaywrightError:
         previous = ""
 
