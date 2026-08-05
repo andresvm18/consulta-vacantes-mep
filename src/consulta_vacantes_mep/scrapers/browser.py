@@ -63,8 +63,8 @@ class BrowserPool:
             self._playwright = None
 
         logger.info("Browser closed")
-   
-   
+
+
     def _context(self) -> BrowserContext:
         """Return this thread's context, creating it on first use."""
         context: BrowserContext | None = getattr(self._local, "context", None)

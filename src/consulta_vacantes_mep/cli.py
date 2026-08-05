@@ -84,14 +84,14 @@ def main() -> None:  # noqa: PLR0912  # TODO(stage-6): split into command handle
 
     if not ensure_chromium_installed():
         return
-    
+
     # Scraping every regional office takes about half a minute. Reuse the
     # result while the user explores different specialties in one session.
     cached_vacancies: list[Vacancy] | None = None
 
     while True:
         option = show_welcome_menu()
-        
+
         # ==========================================
         # OPCIÓN 1
         # ==========================================

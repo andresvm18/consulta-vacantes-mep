@@ -2,7 +2,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from playwright.sync_api import Page
 
-from consulta_vacantes_mep.exceptions import PermanentScrapingError, ScrapingError, TransientScrapingError
+from consulta_vacantes_mep.exceptions import (
+    PermanentScrapingError,
+    ScrapingError,
+    TransientScrapingError,
+)
 from consulta_vacantes_mep.models import (
     Appointment,
     AppointmentQuery,
