@@ -128,3 +128,7 @@ Baseline snapshot of the pre-modernization codebase, tagged as `v0.3.0-legacy`.
 - One Chromium instance is launched per vacancy number, costing roughly 80
   seconds of startup overhead before the first result.
 - The PyInstaller spec does not bundle Playwright browser binaries.
+- The first regional office of a run always fails its first attempt. Blazor
+  prerenders the markup, so no condition on the DOM can tell a live app from a
+  rendered one, and a selection made before the app connects goes unanswered.
+  The retry covers it at a cost of about four seconds per run.

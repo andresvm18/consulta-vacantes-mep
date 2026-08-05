@@ -23,14 +23,24 @@ logger = get_logger(__name__)
 
 
 def _log_retry(state: RetryCallState) -> None:
-    """Record each retry with its cause and the delay before the next attempt."""
+    """Record each retry with its cause and the delay before the next attempt.
+
+    The message matters as much as the type. Playwright puts the operation that
+    timed out and what it was waiting for in the message, and the elapsed time
+    says whether the attempt ran out its timeout or failed immediately. Logging
+    the exception class alone left a warning that named a failure without
+    describing it.
+    """
     exception = state.outcome.exception() if state.outcome else None
 
     logger.warning(
-        "Attempt %d/%d failed (%s); retrying in %.1fs",
+        "%s attempt %d/%d failed after %.1fs (%s: %s); retrying in %.1fs",
+        getattr(state.fn, "__name__", "call"),
         state.attempt_number,
         SCRAPING.max_retries,
+        state.seconds_since_start or 0.0,
         type(exception).__name__ if exception else "unknown",
+        exception,
         state.idle_for,
     )
 

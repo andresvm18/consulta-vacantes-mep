@@ -53,6 +53,14 @@ class ScrapingSettings:
     selector_timeout_ms: int = 8_000
     cell_timeout_ms: int = 3_000
 
+    # Waiting for the grid to settle after picking an office. Deliberately tight:
+    # the observed wait is under a second, and the first attempt of a run always
+    # fails because Blazor prerenders the markup before the app can respond to a
+    # selection, so no wait on the DOM can tell a live app from a rendered one.
+    # A short timeout with retries is cheaper than one long attempt, and adds up
+    # to more patience overall, not less.
+    grid_timeout_ms: int = 3_000
+
     # Only the fixture capture script still pauses blindly. The scrapers wait on
     # conditions instead: the AJAX runtime, the POST response, and the panel
     # having been patched.
