@@ -1,12 +1,9 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import queue
+import threading
 
-from playwright.sync_api import Page
+from playwright.sync_api import BrowserContext, Page
 
-from consulta_vacantes_mep.exceptions import (
-    PermanentScrapingError,
-    ScrapingError,
-    TransientScrapingError,
-)
+from consulta_vacantes_mep.exceptions import ScrapingError, TransientScrapingError
 from consulta_vacantes_mep.models import (
     Appointment,
     AppointmentQuery,
@@ -15,13 +12,20 @@ from consulta_vacantes_mep.models import (
 )
 from consulta_vacantes_mep.parsing import APPOINTMENTS_TABLE_SELECTOR, parse_appointments
 from consulta_vacantes_mep.retry import with_retry
-from consulta_vacantes_mep.scrapers.browser import BrowserPool
+from consulta_vacantes_mep.scrapers.browser import browser_session
 from consulta_vacantes_mep.scrapers.errors import classify, detect_challenge
 from consulta_vacantes_mep.settings import SCRAPING
 from consulta_vacantes_mep.utils.console import clear_screen, print_result, print_section
 from consulta_vacantes_mep.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# How long the collector waits for a result before checking whether any worker
+# is still alive. Short enough that a total collapse is noticed quickly, long
+# enough not to spin.
+_RESULT_POLL_SECONDS = 0.5
+
+_ABANDONED = "worker stopped before this vacancy was queried"
 
 
 def _run_query(page: Page, vacancy_number: str, year: int) -> list[Appointment]:
@@ -67,13 +71,18 @@ def _run_query(page: Page, vacancy_number: str, year: int) -> list[Appointment]:
 
 _run_query_with_retry = with_retry(_run_query)
 
+
 def _query_appointments(
-    pool: BrowserPool, vacancy_number: str, year: int
+    context: BrowserContext, vacancy_number: str, year: int
 ) -> AppointmentQuery:
     """Look up appointments for one vacancy, reporting why the result is empty."""
     try:
-        with pool.page() as page:
+        page = context.new_page()
+
+        try:
             appointments = _run_query_with_retry(page, vacancy_number, year)
+        finally:
+            page.close()
 
     except ScrapingError as error:
         logger.warning("Vacancy %s: query failed (%s)", vacancy_number, error)
@@ -88,10 +97,99 @@ def _query_appointments(
         logger.info("Vacancy %s: no appointments found.", vacancy_number)
         return AppointmentQuery(vacancy_number, QueryOutcome.EMPTY, [])
 
-    logger.info(
-        "Vacancy %s: %d appointments found.", vacancy_number, len(appointments)
-    )
+    logger.info("Vacancy %s: %d appointments found.", vacancy_number, len(appointments))
     return AppointmentQuery(vacancy_number, QueryOutcome.FOUND, appointments)
+
+
+def _worker(
+    tasks: queue.Queue[str],
+    results: queue.Queue[AppointmentQuery],
+    year: int,
+    headless: bool,
+) -> None:
+    """Drain the task queue with one browser, then close it.
+
+    Pulling from a shared queue rather than taking a fixed slice of the numbers
+    keeps every worker busy until the work runs out, which matters because a few
+    lookups take much longer than the rest.
+
+    A worker that dies leaves whatever is still queued for its siblings to pick
+    up, and reports only the number it had already taken. Draining the queue
+    here would steal work from workers that are still healthy.
+    """
+    current: str | None = None
+
+    try:
+        with browser_session(headless=headless) as context:
+            while True:
+                try:
+                    current = tasks.get_nowait()
+                except queue.Empty:
+                    return
+
+                results.put(_query_appointments(context, current, year))
+                current = None
+
+    except Exception as error:
+        logger.exception("Worker thread stopped early")
+
+        if current is not None:
+            results.put(AppointmentQuery(current, QueryOutcome.FAILED, [], str(error)))
+
+
+def _drain(results: queue.Queue[AppointmentQuery]) -> list[AppointmentQuery]:
+    """Collect results that arrived after the progress loop gave up."""
+    drained: list[AppointmentQuery] = []
+
+    while True:
+        try:
+            drained.append(results.get_nowait())
+        except queue.Empty:
+            return drained
+
+
+def _unanswered(
+    vacancy_numbers: list[str], collected: list[AppointmentQuery]
+) -> list[AppointmentQuery]:
+    """Mark numbers nobody reported on, so the caller gets one result per query."""
+    answered = {query.vacancy_number for query in collected}
+
+    return [
+        AppointmentQuery(number, QueryOutcome.FAILED, [], _ABANDONED)
+        for number in vacancy_numbers
+        if number not in answered
+    ]
+
+
+def _collect(
+    results: queue.Queue[AppointmentQuery],
+    workers: list[threading.Thread],
+    total: int,
+) -> list[AppointmentQuery]:
+    """Report each result as it arrives, until every query is answered.
+
+    Polls instead of blocking: if every worker has died, no further result is
+    coming and a blocking get would hang the program.
+    """
+    collected: list[AppointmentQuery] = []
+
+    while len(collected) < total:
+        try:
+            query = results.get(timeout=_RESULT_POLL_SECONDS)
+        except queue.Empty:
+            if any(worker.is_alive() for worker in workers):
+                continue
+            break
+
+        collected.append(query)
+        print_result(
+            len(collected),
+            total,
+            query.vacancy_number,
+            len(query.appointments) if query.outcome is not QueryOutcome.FAILED else None,
+        )
+
+    return collected
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -105,56 +203,51 @@ def scrape_appointments_for_vacancies(
 
     vacancy_numbers = sorted({v.number for v in vacancies if v.number})
     total = len(vacancy_numbers)
+    worker_count = min(SCRAPING.max_concurrency, total)
 
     clear_screen()
     print_section(
         f"Nombramientos MEP — {total} vacantes únicas  ·  "
-        f"{SCRAPING.max_concurrency} consultas simultáneas"
+        f"{worker_count} consultas simultáneas"
     )
 
-    results: list[AppointmentQuery] = []
-    pool = BrowserPool(headless=headless)
-    pool.start()
+    tasks: queue.Queue[str] = queue.Queue()
 
-    try:
-        with ThreadPoolExecutor(max_workers=SCRAPING.max_concurrency) as executor:
-            futures = {
-                executor.submit(_query_appointments, pool, number, year): number
-                for number in vacancy_numbers
-            }
+    for number in vacancy_numbers:
+        tasks.put(number)
 
-            for index, future in enumerate(as_completed(futures), start=1):
-                number = futures[future]
+    results: queue.Queue[AppointmentQuery] = queue.Queue()
 
-                try:
-                    query = future.result()
+    workers = [
+        threading.Thread(
+            target=_worker,
+            args=(tasks, results, year, headless),
+            name=f"appointments-{index}",
+            daemon=True,
+        )
+        for index in range(worker_count)
+    ]
 
-                except PermanentScrapingError as error:
-                    logger.exception("Vacancy %s: page structure changed", number)
-                    query = AppointmentQuery(number, QueryOutcome.FAILED, [], str(error))
+    for worker in workers:
+        worker.start()
 
-                results.append(query)
-                print_result(
-                    index,
-                    total,
-                    number,
-                    len(query.appointments)
-                    if query.outcome is not QueryOutcome.FAILED
-                    else None,
-                )
+    collected = _collect(results, workers, total)
 
-    finally:
-        pool.stop()
+    for worker in workers:
+        worker.join()
 
-    found = sum(len(q.appointments) for q in results)
-    failed = sum(1 for q in results if q.outcome is QueryOutcome.FAILED)
+    collected.extend(_drain(results))
+    collected.extend(_unanswered(vacancy_numbers, collected))
+
+    found = sum(len(q.appointments) for q in collected)
+    failed = sum(1 for q in collected if q.outcome is QueryOutcome.FAILED)
 
     if failed:
         print_section(f"Total: {found} nombramientos  ·  {failed} consultas fallidas")
     else:
         print_section(f"Total: {found} nombramientos encontrados.")
 
-    return results
+    return collected
 
 
 def _submit_query(page: Page, vacancy_number: str, year: int) -> bool:
