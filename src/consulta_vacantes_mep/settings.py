@@ -53,8 +53,9 @@ class ScrapingSettings:
     selector_timeout_ms: int = 8_000
     cell_timeout_ms: int = 3_000
 
-    # Fixed pauses that compensate for ASP.NET postbacks. These are a stopgap;
-    # stage 5 replaces them with condition-based waits.
+    # Only the fixture capture script still pauses blindly. The scrapers wait on
+    # conditions instead: the AJAX runtime, the POST response, and the panel
+    # having been patched.
     settle_ms: int = 1_500
 
     headless: bool = True

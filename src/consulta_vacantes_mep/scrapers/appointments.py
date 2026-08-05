@@ -27,6 +27,69 @@ _RESULT_POLL_SECONDS = 0.5
 
 _ABANDONED = "worker stopped before this vacancy was queried"
 
+_AJAX_READY = "() => Boolean(window.Sys?.WebForms?.PageRequestManager)"
+
+# Set by the endRequest handler once ASP.NET has finished patching the panel.
+_POSTBACK_DONE = "__cvmPostbackDone"
+
+_ARM_POSTBACK = f"""() => {{
+    window.{_POSTBACK_DONE} = false;
+    Sys.WebForms.PageRequestManager.getInstance().add_endRequest(
+        () => {{ window.{_POSTBACK_DONE} = true; }}
+    );
+}}"""
+
+_POSTBACK_DONE_CHECK = f"() => window.{_POSTBACK_DONE} === true"
+
+
+def _wait_for_ajax_runtime(page: Page) -> None:
+    """Wait until the page's AJAX runtime is initialized.
+
+    Replaces a fixed delay after navigation. The form itself needs no waiting,
+    since Playwright waits for actionability on its own, but the postback
+    machinery below does: PageRequestManager comes from a script the page pulls
+    in, and arming a handler before it exists would fail.
+    """
+    page.wait_for_function(_AJAX_READY, timeout=SCRAPING.selector_timeout_ms)
+
+
+def _submit_query(page: Page, vacancy_number: str, year: int) -> None:
+    """Submit the form and wait for the grid to be rendered.
+
+    The previous implementation called wait_for_load_state after triggering the
+    postback. That returns as soon as the *current* page is loaded, which it
+    already is, so it never actually waited: a fixed sleep was doing the work.
+
+    Two conditions replace that sleep, and both are needed. The POST response
+    proves the query reached the server and tells us whether it succeeded, which
+    is the only way to tell an empty result from a failed one: this page renders
+    nothing at all in both cases, with no message to read. But the button and
+    the grid both live inside an UpdatePanel, so the response body is a delta
+    that ASP.NET applies afterwards, and reading the DOM when it arrives is too
+    early. The endRequest event fires once that patch is complete.
+    """
+    page.evaluate(_ARM_POSTBACK)
+
+    page.locator("#radioVacante").check()
+    page.locator("#txtCedula").fill(vacancy_number)
+    page.locator("#ddlA\u00f1o").select_option(str(year))
+
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and "consultanombramientos" in response.url.lower(),
+        timeout=SCRAPING.postback_timeout_ms,
+    ) as response_info:
+        page.evaluate("__doPostBack('btnConsultar','')")
+
+    response = response_info.value
+
+    if not response.ok:
+        message = f"vacancy {vacancy_number}: server returned {response.status}"
+        raise TransientScrapingError(message)
+
+    page.wait_for_function(
+        _POSTBACK_DONE_CHECK, timeout=SCRAPING.postback_timeout_ms
+    )
 
 def _run_query(page: Page, vacancy_number: str, year: int) -> list[Appointment]:
     """Submit one query and read the result grid.
@@ -42,17 +105,8 @@ def _run_query(page: Page, vacancy_number: str, year: int) -> list[Appointment]:
         )
         detect_challenge(page)
 
-        page.wait_for_timeout(SCRAPING.settle_ms)
-
-        page.locator("#radioVacante").check()
-        page.locator("#txtCedula").fill(vacancy_number)
-        page.locator("#ddlAño").select_option(str(year))
-        page.evaluate("__doPostBack('btnConsultar','')")
-
-        page.wait_for_load_state(
-            "domcontentloaded", timeout=SCRAPING.postback_timeout_ms
-        )
-        page.wait_for_timeout(SCRAPING.settle_ms)
+        _wait_for_ajax_runtime(page)
+        _submit_query(page, vacancy_number, year)
 
         detect_challenge(page)
 
@@ -249,31 +303,3 @@ def scrape_appointments_for_vacancies(
 
     return collected
 
-
-def _submit_query(page: Page, vacancy_number: str, year: int) -> bool:
-    """Submit the form and wait for the server's response.
-
-    The previous implementation called wait_for_load_state after triggering the
-    postback. That returns as soon as the *current* page is loaded, which it
-    already is, so it never actually waited: a fixed sleep was doing the work.
-    Waiting on the POST response is a real condition, and its status tells us
-    the query ran even when the result is empty.
-    """
-    page.locator("#radioVacante").check()
-    page.locator("#txtCedula").fill(vacancy_number)
-    page.locator("#ddlA\u00f1o").select_option(str(year))
-
-    with page.expect_response(
-        lambda response: response.request.method == "POST"
-        and "consultanombramientos" in response.url.lower(),
-        timeout=SCRAPING.postback_timeout_ms,
-    ) as response_info:
-        page.evaluate("__doPostBack('btnConsultar','')")
-
-    response = response_info.value
-
-    if not response.ok:
-        message = f"vacancy {vacancy_number}: server returned {response.status}"
-        raise TransientScrapingError(message)
-
-    return True
