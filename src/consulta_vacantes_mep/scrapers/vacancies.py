@@ -13,6 +13,33 @@ from consulta_vacantes_mep.utils.text import normalize_text
 
 logger = get_logger(__name__)
 
+_OFFICES_LOADED = """(minimum) => {
+    const select = document.querySelector('select');
+    return Boolean(select) && select.options.length > minimum;
+}"""
+
+# The select carries a "Seleccione" placeholder before Blazor fills in the real
+# offices, so a single option means the list has not arrived yet.
+_PLACEHOLDER_OPTIONS = 1
+
+
+def _wait_for_offices(page: Page) -> None:
+    """Wait until the office list has been populated.
+
+    Replaces a three second sleep after navigation. The page is a Blazor app:
+    the document is parsed well before the component fetches the offices and
+    renders them, so domcontentloaded says nothing about whether the list is
+    there. The option count is the condition that sleep was approximating.
+    """
+    try:
+        page.wait_for_function(
+            _OFFICES_LOADED,
+            arg=_PLACEHOLDER_OPTIONS,
+            timeout=SCRAPING.selector_timeout_ms,
+        )
+    except Exception as error:
+        raise classify(error, "regional office list") from error
+
 def _select_office(page: Page, office: dict) -> None:
     """Select a regional office and wait for its rows to replace the previous ones.
 
@@ -90,7 +117,7 @@ def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[Vacancy]:
 
         try:
             page.goto(SCRAPING.vacancies_url, wait_until="domcontentloaded", timeout=SCRAPING.page_load_timeout_ms)
-            page.wait_for_timeout(3_000)
+            _wait_for_offices(page)
 
             offices = _get_regional_offices(page)
             total = len(offices)
