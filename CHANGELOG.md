@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports how many queries could not be completed.
 - Test suite covering table parsing, settings, the retry policy, and error
   classification.
+- Vacancy results are cached for the duration of a session, so consecutive menu
+  selections reuse them instead of scraping every regional office again.
+- Tests for the bookkeeping that guarantees one result per vacancy number
+  whatever the worker threads did.
 
 ### Changed
 
@@ -111,10 +115,6 @@ Baseline snapshot of the pre-modernization codebase, tagged as `v0.3.0-legacy`.
 - Excel export with styled headers, frozen panes, and auto-fit columns.
 - Interactive console menu.
 - PyInstaller spec for Windows distribution.
-- Vacancy results are cached for the duration of a session, so consecutive menu
-  selections reuse them instead of scraping every regional office again.
-- Tests for the bookkeeping that guarantees one result per vacancy number
-  whatever the worker threads did.
 
 ### Known issues
 
