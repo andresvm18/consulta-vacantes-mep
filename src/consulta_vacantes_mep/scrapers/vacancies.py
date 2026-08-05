@@ -23,36 +23,79 @@ _OFFICES_LOADED = """(minimum) => {
 _PLACEHOLDER_OPTIONS = 1
 
 
-def _wait_for_offices(page: Page) -> None:
-    """Wait until the office list has been populated.
+_PAGE_READY = """({ selector, minimum }) => {
+    const select = document.querySelector('select');
+    if (!select || select.options.length <= minimum) return false;
+
+    const body = document.querySelector(selector + ' tbody');
+    return Boolean(body) && (body.textContent || '').trim() !== '';
+}"""
+
+
+def _wait_for_page_ready(page: Page) -> None:
+    """Wait until the page has rendered, which is as far as the DOM can tell us.
 
     Replaces a three second sleep after navigation. The page is a Blazor app:
     the document is parsed well before the component fetches the offices and
-    renders them, so domcontentloaded says nothing about whether the list is
-    there. The option count is the condition that sleep was approximating.
+    renders them, so domcontentloaded says nothing about either.
+
+    This proves the markup arrived, not that the app responds to it. Blazor
+    prerenders, so the select and the grid exist before the app is live, and a
+    selection made in that window changes the DOM value with nothing reacting.
+    The first office of a run therefore fails its first attempt; the retry
+    policy covers it, which is why the grid timeout is kept short.
     """
-    try:
-        page.wait_for_function(
-            _OFFICES_LOADED,
-            arg=_PLACEHOLDER_OPTIONS,
-            timeout=SCRAPING.selector_timeout_ms,
-        )
-    except Exception as error:
-        raise classify(error, "regional office list") from error
+    page.wait_for_function(
+        _PAGE_READY,
+        arg={"selector": VACANCIES_TABLE_SELECTOR, "minimum": _PLACEHOLDER_OPTIONS},
+        timeout=SCRAPING.grid_timeout_ms,
+    )
+
+# MudBlazor replaces the rows with a single full-width cell while the grid is not
+# showing data. Neither of these means the office has no vacancies, so neither
+# ends the wait. Captured from the live site; see the note in _select_office.
+_TRANSIENT_GRID_TEXT = ("Cargando", "Seleccione una Direcci\u00f3n Regional")
+
+_GRID_READY = """({ selector, previous, transient }) => {
+    const body = document.querySelector(selector + ' tbody');
+    if (!body) return false;
+
+    const text = (body.textContent || '').trim();
+    if (text === previous) return false;
+
+    if (body.querySelector('td[data-label]')) return true;
+
+    const placeholder = body.querySelector('.mud-table-empty-row');
+    if (!placeholder) return false;
+
+    const message = (placeholder.textContent || '').trim();
+    return message !== '' && !transient.some((m) => message.includes(m));
+}"""
+
 
 def _select_office(page: Page, office: dict) -> None:
-    """Select a regional office and wait for its rows to replace the previous ones.
+    """Select a regional office and wait for the grid to finish showing its rows.
 
-    Blazor keeps the previous office's rows in the DOM while it re-renders, so
-    waiting for a row to exist matches stale content. Comparing against a
-    snapshot taken before the change is a real condition.
+    Two things have to be true before the grid can be read, and waiting for
+    either one alone loses rows.
+
+    The content has to differ from what was there before, because Blazor keeps
+    the previous office's rows in the DOM while it re-renders.
+
+    And the grid has to be in a final state. In place of rows, MudBlazor renders
+    a single cell carrying a message: "Cargando.." while the query runs, and
+    "Seleccione una Direccion Regional para buscar vacantes" before anything is
+    picked. Both differ from the previous content, so a change alone was enough
+    to end the wait, and the office was reported as empty. Real rows carry
+    data-label cells; a genuinely empty office carries a message that is neither
+    of the two transient ones.
     """
     table = page.locator(VACANCIES_TABLE_SELECTOR)
 
     try:
-        previous = table.locator("tbody").text_content(
-            timeout=SCRAPING.cell_timeout_ms
-        ) or ""
+        previous = (
+            table.locator("tbody").text_content(timeout=SCRAPING.cell_timeout_ms) or ""
+        ).strip()
     except PlaywrightError:
         previous = ""
 
@@ -60,13 +103,13 @@ def _select_office(page: Page, office: dict) -> None:
         page.locator("select").first.select_option(office["value"])
 
         page.wait_for_function(
-            """([selector, previous]) => {
-                const body = document.querySelector(selector + ' tbody');
-                if (!body) return false;
-                return (body.textContent || '') !== previous;
-            }""",
-            arg=[VACANCIES_TABLE_SELECTOR, previous],
-            timeout=SCRAPING.selector_timeout_ms,
+            _GRID_READY,
+            arg={
+                "selector": VACANCIES_TABLE_SELECTOR,
+                "previous": previous,
+                "transient": list(_TRANSIENT_GRID_TEXT),
+            },
+            timeout=SCRAPING.grid_timeout_ms,
         )
 
     except Exception as error:
@@ -117,7 +160,7 @@ def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[Vacancy]:
 
         try:
             page.goto(SCRAPING.vacancies_url, wait_until="domcontentloaded", timeout=SCRAPING.page_load_timeout_ms)
-            _wait_for_offices(page)
+            _wait_for_page_ready(page)
 
             offices = _get_regional_offices(page)
             total = len(offices)
@@ -145,7 +188,9 @@ def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[Vacancy]:
                 all_vacancies.extend(vacancies)
 
                 print_progress(index, total, office["text"], len(vacancies))
-                logger.info("%s: %d vacancies found.", office["name"], len(vacancies))
+                logger.info(
+                    "%s: %d vacancies found.", office["text"], len(vacancies)
+                )
 
         except PermanentScrapingError:
             logger.exception("All %d offices failed; the site structure changed", total)
