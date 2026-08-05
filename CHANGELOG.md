@@ -49,6 +49,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `NOTICE` data-handling section now describes current behavior rather than
   planned behavior. The redaction and export-exclusion guarantees will be
   restored once implemented.
+- Scraping waits on conditions rather than fixed delays throughout. A full run
+  dropped from roughly 143 seconds to under 25. Normalized, because the site
+  publishes a different number of vacancies from one hour to the next: about
+  1.6 seconds per regional office down to 0.3, and about 1.7 seconds per
+  vacancy number down to 0.3.
+- Appointment lookups run on four worker threads pulling from a shared queue,
+  each owning one browser for the whole run. Playwright's sync API binds a
+  browser to the thread that started it, so a shared one is not an option;
+  four launches per run replaces one per vacancy number.
 
 ### Fixed
 
@@ -69,19 +78,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workbook verbatim.
 - Waiting for a row to exist after switching regional office matched the
   previous office's rows, which the grid keeps in the DOM while it re-renders.
-  A settle delay is restored until stage 5 replaces it with a wait on the
-  render itself.
+  The scraper waits for the row content to actually change.
+- Postback completion is observed instead of guessed: the scraper waits for the
+  POST response and then for the UpdatePanel to finish applying it. The response
+  status is what separates an empty result from a query that never ran, since
+  the page renders nothing in either case and shows no message to read.
+- A worker thread that fails unexpectedly no longer ends the run. Only the
+  vacancy number it had taken is reported as failed; the rest stay queued for
+  the other workers.
 - Retries no longer nest a Playwright context per attempt, and the browser is
   closed exactly once.
 
 ### Known issues
 
-- Appointment lookups still launch one Chromium instance per vacancy number.
-- Vacancy results are not cached between menu selections, so consecutive
-  searches re-scrape every regional office.
-- Postback completion is inferred from a fixed delay rather than the response
-  itself, so an empty result and a query that never ran remain hard to tell
-  apart at the source.
+- A regional office that times out is indistinguishable from one with no
+  vacancies.
+- There is no menu option to force a refresh of the cached vacancy results
+  within a session.
+- The export prompt appears even when the filtered result is empty and there is
+  nothing to write.
 - The PyInstaller spec does not bundle Playwright browser binaries.
 
 ## [0.3.0] - 2026-08-03
@@ -96,6 +111,10 @@ Baseline snapshot of the pre-modernization codebase, tagged as `v0.3.0-legacy`.
 - Excel export with styled headers, frozen panes, and auto-fit columns.
 - Interactive console menu.
 - PyInstaller spec for Windows distribution.
+- Vacancy results are cached for the duration of a session, so consecutive menu
+  selections reuse them instead of scraping every regional office again.
+- Tests for the bookkeeping that guarantees one result per vacancy number
+  whatever the worker threads did.
 
 ### Known issues
 

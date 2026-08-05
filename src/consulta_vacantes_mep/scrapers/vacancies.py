@@ -145,9 +145,7 @@ def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[Vacancy]:
                 all_vacancies.extend(vacancies)
 
                 print_progress(index, total, office["text"], len(vacancies))
-                logger.info(
-                    "%s: %d vacantes encontradas.", office["text"], len(vacancies)
-                )
+                logger.info("%s: %d vacancies found.", office["name"], len(vacancies))
 
         except PermanentScrapingError:
             logger.exception("All %d offices failed; the site structure changed", total)
