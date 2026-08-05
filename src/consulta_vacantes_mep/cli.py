@@ -66,25 +66,38 @@ def ask_export_to_excel(
         print("\nArchivo Excel generado correctamente:")
         print(file_path)
 
+def get_vacancies(cache: list[Vacancy] | None) -> list[Vacancy]:
+    """Return the cached vacancies, scraping every regional office on first use.
+
+    Scraping all offices takes about half a minute. Reusing the result lets the
+    user explore several specialties in one session without paying that cost
+    again. The cache lives for one session only.
+    """
+    if cache is not None:
+        print(f"\nUsando {len(cache)} vacantes ya consultadas.")
+        return cache
+
+    return scrape_all_vacancies()
 
 def main() -> None:  # noqa: PLR0912  # TODO(stage-6): split into command handlers
     configure_logging()
 
     if not ensure_chromium_installed():
         return
+    
+    # Scraping every regional office takes about half a minute. Reuse the
+    # result while the user explores different specialties in one session.
+    cached_vacancies: list[Vacancy] | None = None
 
     while True:
         option = show_welcome_menu()
-
+        
         # ==========================================
         # OPCIÓN 1
         # ==========================================
         if option == "1":
-
-            vacancies = scrape_all_vacancies(headless=True)
-
-            # print_vacancies(vacancies)
-
+            cached_vacancies = get_vacancies(cached_vacancies)
+            vacancies = cached_vacancies
             year = ask_year()
             print("\nConsultando nombramientos...")
 
@@ -123,14 +136,12 @@ def main() -> None:  # noqa: PLR0912  # TODO(stage-6): split into command handle
                 print("\nDebe ingresar una especialidad válida.")
                 continue
 
-            vacancies = scrape_all_vacancies(headless=True)
+            cached_vacancies = get_vacancies(cached_vacancies)
 
             filtered_vacancies = filter_vacancies_by_specialty(
-                vacancies,
+                cached_vacancies,
                 specialty
             )
-
-            # print_vacancies(filtered_vacancies)
 
             year = ask_year()
             print("\nConsultando nombramientos...")
