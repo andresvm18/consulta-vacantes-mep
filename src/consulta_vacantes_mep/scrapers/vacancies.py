@@ -1,3 +1,4 @@
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, sync_playwright
 
 from consulta_vacantes_mep.exceptions import PermanentScrapingError, ScrapingError
@@ -13,18 +14,31 @@ from consulta_vacantes_mep.utils.text import normalize_text
 logger = get_logger(__name__)
 
 def _select_office(page: Page, office: dict) -> None:
-    """Select a regional office and wait for its results to render."""
+    """Select a regional office and wait for its rows to replace the previous ones.
+
+    Blazor keeps the previous office's rows in the DOM while it re-renders, so
+    waiting for a row to exist matches stale content. Comparing against a
+    snapshot taken before the change is a real condition.
+    """
+    table = page.locator(VACANCIES_TABLE_SELECTOR)
+
+    try:
+        previous = table.locator("tbody").text_content() or ""
+    except PlaywrightError:
+        previous = ""
+
     try:
         page.locator("select").first.select_option(office["value"])
 
-        page.wait_for_selector(
-            f"{VACANCIES_TABLE_SELECTOR} tbody tr",
+        page.wait_for_function(
+            """([selector, previous]) => {
+                const body = document.querySelector(selector + ' tbody');
+                if (!body) return false;
+                return (body.textContent || '') !== previous;
+            }""",
+            arg=[VACANCIES_TABLE_SELECTOR, previous],
             timeout=SCRAPING.selector_timeout_ms,
         )
-        # The grid keeps the previous office's rows in the DOM while Blazor
-        # re-renders, so waiting for a row to exist does not mean the new data
-        # has arrived. Stage 5 replaces this with a wait on the render itself.
-        page.wait_for_timeout(SCRAPING.settle_ms)
 
     except Exception as error:
         raise classify(error, f"office {office['text']}") from error
