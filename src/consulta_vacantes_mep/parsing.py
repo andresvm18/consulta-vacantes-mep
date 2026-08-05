@@ -16,6 +16,7 @@ from playwright.sync_api import Locator
 
 from consulta_vacantes_mep.labels import APPOINTMENT_LABELS, VACANCY_LABELS
 from consulta_vacantes_mep.models import Appointment, Vacancy
+from consulta_vacantes_mep.settings import SCRAPING
 from consulta_vacantes_mep.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -49,7 +50,7 @@ def _row_by_column_attribute(row: Locator, attribute: str) -> dict[str, str]:
 
     for i in range(cells.count()):
         cell = cells.nth(i)
-        column = cell.get_attribute(attribute)
+        column = cell.get_attribute(attribute, timeout=SCRAPING.cell_timeout_ms)
 
         if column:
             values[clean(column)] = clean(cell.text_content())
@@ -79,8 +80,16 @@ def parse_vacancies(table: Locator, regional_office: str) -> list[Vacancy]:
         values = _row_by_column_attribute(rows.nth(i), VACANCY_CELL_ATTRIBUTE)
 
         if not values:
+            row = rows.nth(i)
+            logger.warning(
+                "%s: skipping row %d with no labelled cells: %s",
+                regional_office,
+                i,
+                clean(row.evaluate("node => node.outerHTML"))[:300],
+            )
             continue
 
+        logger.debug("%s: grid has %d rows", regional_office, rows.count())
         vacancy = _build(Vacancy, VACANCY_LABELS, values, regional_office)
 
         if vacancy is not None:
