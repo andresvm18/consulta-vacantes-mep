@@ -21,7 +21,6 @@ from consulta_vacantes_mep.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-
 def _log_retry(state: RetryCallState) -> None:
     """Record each retry with its cause and the delay before the next attempt.
 

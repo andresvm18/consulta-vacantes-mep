@@ -51,6 +51,7 @@ def _wait_for_page_ready(page: Page) -> None:
         timeout=SCRAPING.grid_timeout_ms,
     )
 
+
 # MudBlazor replaces the rows with a single full-width cell while the grid is not
 # showing data. Neither of these means the office has no vacancies, so neither
 # ends the wait. Captured from the live site; see the note in _select_office.
@@ -133,6 +134,7 @@ def _scrape_regional_office(page: Page, office: dict) -> list[Vacancy]:
 
     return parse_vacancies(page.locator(VACANCIES_TABLE_SELECTOR), office["text"])
 
+
 # ── Extraction ────────────────────────────────────────────────────────────────
 def _get_regional_offices(page) -> list[dict]:
     select = page.locator("select").first
@@ -147,7 +149,6 @@ def _get_regional_offices(page) -> list[dict]:
             offices.append({"text": text, "value": value})
 
     return offices
-
 
 
 # ── Public API ────────────────────────────────────────────────────────────────

@@ -75,6 +75,7 @@ def parse_vacancies(table: Locator, regional_office: str) -> list[Vacancy]:
     """Extract vacancies from one regional office's results grid."""
     rows = table.locator("tbody tr")
     vacancies: list[Vacancy] = []
+    logger.debug("%s: grid has %d rows", regional_office, rows.count())
 
     for i in range(rows.count()):
         values = _row_by_column_attribute(rows.nth(i), VACANCY_CELL_ATTRIBUTE)
@@ -89,7 +90,6 @@ def parse_vacancies(table: Locator, regional_office: str) -> list[Vacancy]:
             )
             continue
 
-        logger.debug("%s: grid has %d rows", regional_office, rows.count())
         vacancy = _build(Vacancy, VACANCY_LABELS, values, regional_office)
 
         if vacancy is not None:
