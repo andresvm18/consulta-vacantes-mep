@@ -14,7 +14,6 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
@@ -52,27 +51,21 @@ class ChromiumCheck:
 
 
 def chromium_is_available() -> bool:
-    """Report whether the Chromium this installation expects is on disk.
+    """Report whether a Chromium this installation can drive is present.
 
-    Asks Playwright where the browser should be and looks for the file, rather
-    than launching one. The launch proved more, but it cost a full browser
-    startup and several hundred megabytes on every run to answer a question
-    that is almost always yes.
-
-    A file that exists but cannot run is not caught here. It fails on the first
-    real navigation instead, where the error classifier and the retry policy
-    already deal with it.
+    Launching a browser and closing it proves more than looking for the file,
+    and on Windows it measured the same: 0.71s, against 0.66s for a check that
+    only reads the path. Reading the path is faster on its own, 0.43s, but it
+    leaves the driver's init unfinished, and asyncio reports the cancelled task
+    and its unretrieved exception when the process exits.
     """
     try:
         with sync_playwright() as playwright:
-            executable = Path(playwright.chromium.executable_path)
+            browser = playwright.chromium.launch(headless=True)
+            browser.close()
 
     except Exception:
-        logger.warning("Could not ask Playwright where Chromium lives", exc_info=True)
-        return False
-
-    if not executable.exists():
-        logger.warning("Chromium is not installed at %s", executable)
+        logger.warning("Chromium is not available", exc_info=True)
         return False
 
     return True
