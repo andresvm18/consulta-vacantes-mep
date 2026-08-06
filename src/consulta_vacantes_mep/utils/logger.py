@@ -23,7 +23,6 @@ _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 _ROOT_LOGGER_NAME = "consulta_vacantes_mep"
 
-logger = logging.getLogger(_ROOT_LOGGER_NAME)
 
 def _build_file_handler(path, level: int) -> RotatingFileHandler:
     """Create a size-limited file handler that keeps a few old copies."""
@@ -38,6 +37,23 @@ def _build_file_handler(path, level: int) -> RotatingFileHandler:
     return handler
 
 
+def _build_stderr_handler() -> logging.StreamHandler | None:
+    """Warnings and above on stderr, when there is a stderr to write to.
+
+    A windowed build has none. PyInstaller with console=False leaves
+    sys.stderr as None on Windows, and a handler pointed at it fails on the
+    first warning the program emits, which would be the first sign of trouble
+    turning into the crash itself. The log files still record everything.
+    """
+    if sys.stderr is None:
+        return None
+
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setLevel(logging.WARNING)
+    handler.setFormatter(logging.Formatter("  %(levelname)s: %(message)s"))
+    return handler
+
+
 def configure_logging(level: str | None = None) -> None:
     """Attach handlers to the package logger. Safe to call more than once."""
     logger = logging.getLogger(_ROOT_LOGGER_NAME)
@@ -48,8 +64,6 @@ def configure_logging(level: str | None = None) -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     resolved_level = getattr(logging, (level or LOGGING.level).upper(), logging.INFO)
-
-    logger = logging.getLogger(_ROOT_LOGGER_NAME)
     logger.setLevel(resolved_level)
 
     # Do not let records climb to the root logger, which would duplicate output
@@ -62,10 +76,10 @@ def configure_logging(level: str | None = None) -> None:
     # Warnings and above also go to stderr, so a user running the CLI sees that
     # something went wrong without opening a log file. Routine INFO records stay
     # out of the terminal: the console layer owns what the user reads.
-    stderr_handler = logging.StreamHandler(sys.stderr)
-    stderr_handler.setLevel(logging.WARNING)
-    stderr_handler.setFormatter(logging.Formatter("  %(levelname)s: %(message)s"))
-    logger.addHandler(stderr_handler)
+    stderr_handler = _build_stderr_handler()
+
+    if stderr_handler is not None:
+        logger.addHandler(stderr_handler)
 
 
 
