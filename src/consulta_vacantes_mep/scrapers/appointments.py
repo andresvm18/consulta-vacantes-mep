@@ -3,6 +3,14 @@ import threading
 
 from playwright.sync_api import BrowserContext, Page
 
+from consulta_vacantes_mep.events import (
+    ItemCompleted,
+    NullReporter,
+    Phase,
+    PhaseFinished,
+    PhaseStarted,
+    Reporter,
+)
 from consulta_vacantes_mep.exceptions import ScrapingError, TransientScrapingError
 from consulta_vacantes_mep.models import (
     Appointment,
@@ -15,7 +23,6 @@ from consulta_vacantes_mep.retry import with_retry
 from consulta_vacantes_mep.scrapers.browser import browser_session
 from consulta_vacantes_mep.scrapers.errors import classify, detect_challenge
 from consulta_vacantes_mep.settings import SCRAPING
-from consulta_vacantes_mep.utils.console import clear_screen, print_result, print_section
 from consulta_vacantes_mep.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -90,6 +97,7 @@ def _submit_query(page: Page, vacancy_number: str, year: int) -> None:
     page.wait_for_function(
         _POSTBACK_DONE_CHECK, timeout=SCRAPING.postback_timeout_ms
     )
+
 
 def _run_query(page: Page, vacancy_number: str, year: int) -> list[Appointment]:
     """Submit one query and read the result grid.
@@ -219,12 +227,14 @@ def _collect(
     results: queue.Queue[AppointmentQuery],
     workers: list[threading.Thread],
     total: int,
+    reporter: Reporter | None = None,
 ) -> list[AppointmentQuery]:
     """Report each result as it arrives, until every query is answered.
 
     Polls instead of blocking: if every worker has died, no further result is
     coming and a blocking get would hang the program.
     """
+    report = reporter or NullReporter()
     collected: list[AppointmentQuery] = []
 
     while len(collected) < total:
@@ -236,11 +246,14 @@ def _collect(
             break
 
         collected.append(query)
-        print_result(
-            len(collected),
-            total,
-            query.vacancy_number,
-            len(query.appointments) if query.outcome is not QueryOutcome.FAILED else None,
+        report.emit(
+            ItemCompleted(
+                Phase.APPOINTMENTS,
+                len(collected),
+                total,
+                query.vacancy_number,
+                len(query.appointments) if query.outcome is not QueryOutcome.FAILED else None,
+            )
         )
 
     return collected
@@ -251,7 +264,9 @@ def scrape_appointments_for_vacancies(
     vacancies: list[Vacancy],
     year: int,
     headless: bool = SCRAPING.headless,
+    reporter: Reporter | None = None,
 ) -> list[AppointmentQuery]:
+    report = reporter or NullReporter()
     if not vacancies:
         return []
 
@@ -259,11 +274,7 @@ def scrape_appointments_for_vacancies(
     total = len(vacancy_numbers)
     worker_count = min(SCRAPING.max_concurrency, total)
 
-    clear_screen()
-    print_section(
-        f"Nombramientos MEP — {total} vacantes únicas  ·  "
-        f"{worker_count} consultas simultáneas"
-    )
+    report.emit(PhaseStarted(Phase.APPOINTMENTS, total, worker_count))
 
     tasks: queue.Queue[str] = queue.Queue()
 
@@ -285,7 +296,7 @@ def scrape_appointments_for_vacancies(
     for worker in workers:
         worker.start()
 
-    collected = _collect(results, workers, total)
+    collected = _collect(results, workers, total, report)
 
     for worker in workers:
         worker.join()
@@ -296,10 +307,10 @@ def scrape_appointments_for_vacancies(
     found = sum(len(q.appointments) for q in collected)
     failed = sum(1 for q in collected if q.outcome is QueryOutcome.FAILED)
 
-    if failed:
-        print_section(f"Total: {found} nombramientos  ·  {failed} consultas fallidas")
-    else:
-        print_section(f"Total: {found} nombramientos encontrados.")
+    logger.info(
+        "Total: %d appointments across %d queries; %d failed.", found, total, failed
+    )
+    report.emit(PhaseFinished(Phase.APPOINTMENTS, found, failed))
 
     return collected
 

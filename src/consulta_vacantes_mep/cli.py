@@ -1,3 +1,4 @@
+from consulta_vacantes_mep.events import Reporter
 from consulta_vacantes_mep.exports.excel import export_data_to_excel
 from consulta_vacantes_mep.labels import appointment_to_row, vacancy_to_row
 from consulta_vacantes_mep.models import Appointment, QueryOutcome, Vacancy
@@ -6,6 +7,7 @@ from consulta_vacantes_mep.scrapers.vacancies import (
     filter_vacancies_by_specialty,
     scrape_all_vacancies,
 )
+from consulta_vacantes_mep.utils.console import ConsoleReporter
 from consulta_vacantes_mep.utils.logger import configure_logging
 from consulta_vacantes_mep.utils.menu import ask_year, show_welcome_menu
 from consulta_vacantes_mep.utils.playwright_setup import ensure_chromium_installed
@@ -66,7 +68,7 @@ def ask_export_to_excel(
         print("\nArchivo Excel generado correctamente:")
         print(file_path)
 
-def get_vacancies(cache: list[Vacancy] | None) -> list[Vacancy]:
+def get_vacancies(cache: list[Vacancy] | None, reporter: Reporter) -> list[Vacancy]:
     """Return the cached vacancies, scraping every regional office on first use.
 
     Scraping all offices takes about half a minute. Reusing the result lets the
@@ -77,10 +79,12 @@ def get_vacancies(cache: list[Vacancy] | None) -> list[Vacancy]:
         print(f"\nUsando {len(cache)} vacantes ya consultadas.")
         return cache
 
-    return scrape_all_vacancies()
+    return scrape_all_vacancies(reporter=reporter)
 
 def main() -> None:  # noqa: PLR0912  # TODO(stage-6): split into command handlers
     configure_logging()
+    # Initialize the console reporter
+    reporter: Reporter = ConsoleReporter()
 
     if not ensure_chromium_installed():
         return
@@ -96,13 +100,13 @@ def main() -> None:  # noqa: PLR0912  # TODO(stage-6): split into command handle
         # OPCIÓN 1
         # ==========================================
         if option == "1":
-            cached_vacancies = get_vacancies(cached_vacancies)
+            cached_vacancies = get_vacancies(cached_vacancies, reporter)
             vacancies = cached_vacancies
             year = ask_year()
             print("\nConsultando nombramientos...")
 
             queries = scrape_appointments_for_vacancies(
-                vacancies, year=year, headless=True
+                vacancies, year=year, headless=True, reporter=reporter
             )
 
             appointments = [a for q in queries for a in q.appointments]
@@ -136,7 +140,7 @@ def main() -> None:  # noqa: PLR0912  # TODO(stage-6): split into command handle
                 print("\nDebe ingresar una especialidad válida.")
                 continue
 
-            cached_vacancies = get_vacancies(cached_vacancies)
+            cached_vacancies = get_vacancies(cached_vacancies, reporter)
 
             filtered_vacancies = filter_vacancies_by_specialty(
                 cached_vacancies,
@@ -147,7 +151,7 @@ def main() -> None:  # noqa: PLR0912  # TODO(stage-6): split into command handle
             print("\nConsultando nombramientos...")
 
             queries = scrape_appointments_for_vacancies(
-                filtered_vacancies, year=year, headless=True
+                filtered_vacancies, year=year, headless=True, reporter=reporter
             )
 
             appointments = [a for q in queries for a in q.appointments]

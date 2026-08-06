@@ -1,13 +1,20 @@
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, sync_playwright
 
+from consulta_vacantes_mep.events import (
+    ItemCompleted,
+    NullReporter,
+    Phase,
+    PhaseFinished,
+    PhaseStarted,
+    Reporter,
+)
 from consulta_vacantes_mep.exceptions import PermanentScrapingError, ScrapingError
 from consulta_vacantes_mep.models import Vacancy
 from consulta_vacantes_mep.parsing import VACANCIES_TABLE_SELECTOR, parse_vacancies
 from consulta_vacantes_mep.retry import with_retry
 from consulta_vacantes_mep.scrapers.errors import classify
 from consulta_vacantes_mep.settings import SCRAPING
-from consulta_vacantes_mep.utils.console import clear_screen, print_progress, print_section
 from consulta_vacantes_mep.utils.logger import get_logger
 from consulta_vacantes_mep.utils.text import normalize_text
 
@@ -120,8 +127,15 @@ def _select_office(page: Page, office: dict) -> None:
 _select_office_with_retry = with_retry(_select_office)
 
 
-def _scrape_regional_office(page: Page, office: dict) -> list[Vacancy]:
-    """Scrape one regional office. Raises on permanent failure."""
+def _scrape_regional_office(page: Page, office: dict) -> list[Vacancy] | None:
+    """Scrape one regional office, or return None if it could not be read.
+
+    An office that failed and an office with nothing published are different
+    facts, and collapsing them into an empty list is exactly how the grid race
+    stayed invisible: the run reported zero vacancies and looked complete.
+
+    Raises on permanent failure.
+    """
     try:
         _select_office_with_retry(page, office)
 
@@ -130,7 +144,7 @@ def _scrape_regional_office(page: Page, office: dict) -> list[Vacancy]:
 
     except ScrapingError as error:
         logger.warning("Office %s: %s", office["text"], error)
-        return []
+        return None
 
     return parse_vacancies(page.locator(VACANCIES_TABLE_SELECTOR), office["text"])
 
@@ -152,8 +166,17 @@ def _get_regional_offices(page) -> list[dict]:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
-def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[Vacancy]:
+def scrape_all_vacancies(
+    headless: bool = SCRAPING.headless, reporter: Reporter | None = None
+) -> list[Vacancy]:
+    report = reporter or NullReporter()
     all_vacancies: list[Vacancy] = []
+
+    # Bound before the browser opens: the handlers below report on them, and a
+    # failure during navigation would otherwise leave them undefined.
+    total = 0
+    failed = 0
+    permanent_failures = 0
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
@@ -166,10 +189,7 @@ def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[Vacancy]:
             offices = _get_regional_offices(page)
             total = len(offices)
 
-            clear_screen()
-            print_section(f"Vacantes MEP — {total} direcciones regionales")
-
-            permanent_failures = 0
+            report.emit(PhaseStarted(Phase.VACANCIES, total))
 
             for index, office in enumerate(offices, start=1):
                 try:
@@ -178,7 +198,7 @@ def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[Vacancy]:
                 except PermanentScrapingError:
                     permanent_failures += 1
                     logger.exception("Office %s: page structure changed", office["text"])
-                    vacancies = []
+                    vacancies = None
 
                     # Every office failing the same way means the site changed,
                     # not that this run was unlucky. Continuing would produce an
@@ -186,11 +206,21 @@ def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[Vacancy]:
                     if permanent_failures == total:
                         raise
 
-                all_vacancies.extend(vacancies)
+                if vacancies is None:
+                    failed += 1
+                    logger.warning("%s: could not be read.", office["text"])
+                else:
+                    all_vacancies.extend(vacancies)
+                    logger.info("%s: %d vacancies found.", office["text"], len(vacancies))
 
-                print_progress(index, total, office["text"], len(vacancies))
-                logger.info(
-                    "%s: %d vacancies found.", office["text"], len(vacancies)
+                report.emit(
+                    ItemCompleted(
+                        Phase.VACANCIES,
+                        index,
+                        total,
+                        office["text"],
+                        None if vacancies is None else len(vacancies),
+                    )
                 )
 
         except PermanentScrapingError:
@@ -203,8 +233,8 @@ def scrape_all_vacancies(headless: bool = SCRAPING.headless) -> list[Vacancy]:
         finally:
             browser.close()
 
-    print_section(f"Total: {len(all_vacancies)} vacantes encontradas.")
-    logger.info(f"Total: {len(all_vacancies)} vacancies found.")
+    report.emit(PhaseFinished(Phase.VACANCIES, len(all_vacancies), failed))
+    logger.info("Total: %d vacancies found.", len(all_vacancies))
     return all_vacancies
 
 
