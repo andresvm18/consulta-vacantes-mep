@@ -10,8 +10,24 @@ from consulta_vacantes_mep.scrapers.vacancies import (
 from consulta_vacantes_mep.utils.console import ConsoleReporter
 from consulta_vacantes_mep.utils.logger import configure_logging
 from consulta_vacantes_mep.utils.menu import ask_year, show_welcome_menu
-from consulta_vacantes_mep.utils.playwright_setup import ensure_chromium_installed
+from consulta_vacantes_mep.utils.playwright_setup import (
+    ChromiumStatus,
+    chromium_is_available,
+    install_chromium,
+)
 
+# What each failed outcome means to the user. The check itself reports facts;
+# the wording is a decision for whoever is showing them.
+CHROMIUM_MESSAGES = {
+    ChromiumStatus.NOT_INSTALLABLE: (
+        "El ejecutable debería incluir el navegador y no lo trae. "
+        "Reinstale la aplicación."
+    ),
+    ChromiumStatus.FAILED: (
+        "No se pudo instalar Chromium automáticamente. "
+        "Instálelo con: python -m playwright install chromium"
+    ),
+}
 
 def print_vacancies(vacancies: list[Vacancy]) -> None:
     if not vacancies:
@@ -81,12 +97,33 @@ def get_vacancies(cache: list[Vacancy] | None, reporter: Reporter) -> list[Vacan
 
     return scrape_all_vacancies(reporter=reporter)
 
+def prepare_browser() -> bool:
+    """Make sure Chromium is usable, reporting to the user if it is not.
+
+    Checking and installing are separate calls so that the message about a
+    download that takes a minute is printed before it starts, not after.
+    """
+    if chromium_is_available():
+        return True
+
+    print("\nChromium de Playwright no está instalado.")
+    print("Instalando Chromium automáticamente...")
+
+    result = install_chromium()
+
+    if result.ok:
+        return True
+
+    print(f"\n{CHROMIUM_MESSAGES[result.status]}")
+    return False
+
+
 def main() -> None:  # noqa: PLR0912  # TODO(stage-6): split into command handlers
     configure_logging()
     # Initialize the console reporter
     reporter: Reporter = ConsoleReporter()
 
-    if not ensure_chromium_installed():
+    if not prepare_browser():
         return
 
     # Scraping every regional office takes about half a minute. Reuse the
