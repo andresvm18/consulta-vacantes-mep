@@ -1,5 +1,14 @@
+"""The interactive menu.
+
+Kept until the GUI replaces it. Rendering goes through Rich rather than raw
+prints so there is one console in the process: two writers taking turns leave
+the progress bar drawing over half-written lines.
+"""
+
+from rich.console import Console
+from rich.panel import Panel
+
 from consulta_vacantes_mep.settings import default_year
-from consulta_vacantes_mep.utils.console import clear_screen
 
 MIN_YEAR = 2000
 MAX_YEAR = 2100
@@ -7,55 +16,45 @@ MAX_YEAR = 2100
 MENU_OPTIONS = {
     "1": "Buscar todas las especialidades",
     "2": "Buscar especialidad por nombre",
-    "3": "Salir",
+    "3": "Actualizar la lista de vacantes",
+    "4": "Salir",
 }
 
-def _divider(char="─", width=52):
-    return char * width
 
-
-def _print_header():
-    print()
-    print(_divider("═"))
-    print("  Sistema de Consulta MEP".center(52))
-    print("  Nombramientos y vacantes docentes".center(52))
-    print(_divider("═"))
-
-
-def _print_options():
-    print()
-    for key, label in MENU_OPTIONS.items():
-        print(f"  [{key}]  {label}")
-    print()
-    print(_divider())
-
-
-def show_welcome_menu() -> str:
-    """Display the main menu and return the chosen option (1-3)."""
+def show_welcome_menu(console: Console) -> str:
+    """Display the main menu and return the chosen option."""
     while True:
-        clear_screen()
-        _print_header()
-        _print_options()
-        choice = input("  Seleccione una opción: ").strip()
+        console.clear()
+        console.print(
+            Panel(
+                "Nombramientos y vacantes docentes",
+                title="Sistema de Consulta MEP",
+                width=52,
+            )
+        )
+
+        for key, label in MENU_OPTIONS.items():
+            console.print(f"  [bold]{key}[/bold]  {label}")
+
+        choice = console.input("\n  Seleccione una opción: ").strip()
 
         if choice in MENU_OPTIONS:
             return choice
 
-        print(f"\n  ✗  Opción inválida: «{choice}». Intente de nuevo.")
+        console.print(f"\n  [yellow]Opción inválida: «{choice}». Intente de nuevo.[/yellow]")
+        console.input("  Presione Enter para continuar...")
 
 
-def ask_year() -> int:
+def ask_year(console: Console) -> int:
     """Prompt for a query year, falling back to the current one."""
     fallback = default_year()
-
-    print()
-    raw = input(f"  Año de consulta [{fallback}]: ").strip()
+    raw = console.input(f"\n  Año de consulta [{fallback}]: ").strip()
 
     if not raw:
         return fallback
 
     if not raw.isdigit() or not (MIN_YEAR <= int(raw) <= MAX_YEAR):
-        print(f"  ✗  Año inválido. Se usará {fallback}.")
+        console.print(f"  [yellow]Año inválido. Se usará {fallback}.[/yellow]")
         return fallback
 
     return int(raw)

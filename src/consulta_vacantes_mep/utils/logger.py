@@ -12,6 +12,9 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 
+from rich.console import Console
+from rich.logging import RichHandler
+
 from consulta_vacantes_mep.settings import LOGGING
 from consulta_vacantes_mep.utils.paths import LOG_DIR
 
@@ -37,14 +40,30 @@ def _build_file_handler(path, level: int) -> RotatingFileHandler:
     return handler
 
 
-def _build_stderr_handler() -> logging.StreamHandler | None:
-    """Warnings and above on stderr, when there is a stderr to write to.
+def _build_screen_handler(console: Console | None) -> logging.Handler | None:
+    """Warnings and above on screen, when there is a screen to write to.
 
-    A windowed build has none. PyInstaller with console=False leaves
-    sys.stderr as None on Windows, and a handler pointed at it fails on the
-    first warning the program emits, which would be the first sign of trouble
-    turning into the crash itself. The log files still record everything.
+    A caller that owns a Rich console passes it, and the handler shares it.
+    That is not cosmetic: Rich draws a live progress bar by repainting the
+    lines it owns, and a second writer on the same terminal tears the display.
+    Sharing the console makes the record appear above the bar instead.
+
+    A windowed build has no screen at all. PyInstaller with console=False
+    leaves sys.stderr as None on Windows, and a handler pointed at it fails on
+    the first warning the program emits, which would turn the first sign of
+    trouble into the crash itself. The log files record everything either way.
     """
+    if console is not None:
+        rich_handler = RichHandler(
+            console=console,
+            level=logging.WARNING,
+            show_time=False,
+            show_path=False,
+            markup=False,
+        )
+        rich_handler.setFormatter(logging.Formatter("%(message)s"))
+        return rich_handler
+
     if sys.stderr is None:
         return None
 
@@ -54,7 +73,7 @@ def _build_stderr_handler() -> logging.StreamHandler | None:
     return handler
 
 
-def configure_logging(level: str | None = None) -> None:
+def configure_logging(level: str | None = None, console: Console | None = None) -> None:
     """Attach handlers to the package logger. Safe to call more than once."""
     logger = logging.getLogger(_ROOT_LOGGER_NAME)
 
@@ -76,10 +95,10 @@ def configure_logging(level: str | None = None) -> None:
     # Warnings and above also go to stderr, so a user running the CLI sees that
     # something went wrong without opening a log file. Routine INFO records stay
     # out of the terminal: the console layer owns what the user reads.
-    stderr_handler = _build_stderr_handler()
+    screen_handler = _build_screen_handler(console)
 
-    if stderr_handler is not None:
-        logger.addHandler(stderr_handler)
+    if screen_handler is not None:
+        logger.addHandler(screen_handler)
 
 
 

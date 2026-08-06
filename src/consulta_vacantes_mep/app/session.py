@@ -63,12 +63,22 @@ class Session:
         """How many vacancies are already loaded, or None if none are."""
         return None if self._cache is None else len(self._cache)
 
-    def vacancies(self, *, refresh: bool = False) -> list[Vacancy]:
-        """Return every published vacancy, scraping only when needed."""
+    def vacancies(
+        self, specialty: str | None = None, *, refresh: bool = False
+    ) -> list[Vacancy]:
+        """Return the published vacancies, scraping only when needed.
+
+        An empty specialty means every vacancy. The filter is applied to the
+        cache rather than replacing it, so narrowing a search does not throw
+        away the offices already scraped.
+        """
         if self._cache is None or refresh:
             self._cache = scrape_all_vacancies(
                 headless=self._headless, reporter=self._reporter
             )
+
+        if specialty:
+            return filter_vacancies_by_specialty(self._cache, specialty)
 
         return self._cache
 
@@ -80,10 +90,7 @@ class Session:
         An empty specialty means every vacancy, which is what the two menu
         options differed on and the only thing they differed on.
         """
-        vacancies = self.vacancies(refresh=refresh)
-
-        if specialty:
-            vacancies = filter_vacancies_by_specialty(vacancies, specialty)
+        vacancies = self.vacancies(specialty, refresh=refresh)
 
         queries = scrape_appointments_for_vacancies(
             vacancies, year=year, headless=self._headless, reporter=self._reporter

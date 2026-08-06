@@ -29,6 +29,8 @@ dependencies = [
     "pandas>=2.2,<3.0",
     "openpyxl>=3.1,<4.0",
     "tenacity>=9.0,<10.0",
+    "typer>=0.15,<1.0",
+    "rich>=13.9,<16.0",
 ]
 
 [project.optional-dependencies]
@@ -117,14 +119,10 @@ ignore = [
     "DTZ005",    # Etapa 3: datetime.now() sin zona horaria
     "BLE001",    # Etapa 4: except Exception generalizado
     "S603",      # Etapa 4: subprocess.run en playwright_setup
-    "S605",      # Etapa 6: os.system("cls") en console.py
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# La capa CLI legitimamente imprime. Todo lo demas no.
-"src/consulta_vacantes_mep/cli.py" = ["T20"]
-"src/consulta_vacantes_mep/utils/console.py" = ["T20"]
-"src/consulta_vacantes_mep/utils/menu.py" = ["T20"]
+# Nada en src/ imprime: la interfaz escribe a traves de la consola de Rich.
 "tests/**" = ["S", "PLR2004"]
 "scripts/**" = ["T201"]
 
