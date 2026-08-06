@@ -32,6 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selections reuse them instead of scraping every regional office again.
 - Tests for the bookkeeping that guarantees one result per vacancy number
   whatever the worker threads did.
+- Progress events emitted by the scrapers, so a run can be drawn by a terminal,
+  a GUI, or nothing at all. The scrapers no longer decide how they look.
+- An application layer owning the search sequence and the vacancy cache. The
+  two menu options ran the same steps and differed only in whether a specialty
+  narrowed the vacancies down.
+- Subcommands `buscar` and `vacantes`. Running with no subcommand still opens
+  the interactive menu.
+- Menu option to refresh the cached vacancy list within a session.
 
 ### Changed
 
@@ -62,6 +70,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each owning one browser for the whole run. Playwright's sync API binds a
   browser to the thread that started it, so a shared one is not an option;
   four launches per run replaces one per vacancy number.
+- The console interface is drawn with Rich: one progress bar per phase instead
+  of a line per result, which four concurrent workers made unreadable. Log
+  warnings share the same console, since a second writer tears a live display.
+- The Chromium check returns a status the caller renders instead of printing
+  its own messages, and the installer runs without opening a console window
+  and with its output captured into the log. A windowed build has no standard
+  output: a print would raise before the interface appeared.
+- The menu moved into the `cli` package and `utils/console.py` was removed.
+  Nothing under `src/` prints any more, so the linter exemptions for `print`
+  are gone rather than relocated.
 
 ### Fixed
 
@@ -92,15 +110,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the other workers.
 - Retries no longer nest a Playwright context per attempt, and the browser is
   closed exactly once.
+- A regional office that could not be read is reported as a failure instead of
+  as zero vacancies, and counted separately in the run summary.
+- The stderr log handler is only attached when there is a stderr to write to.
+- The export prompt no longer appears when the search found nothing.
 
 ### Known issues
 
-- A regional office that times out is indistinguishable from one with no
-  vacancies.
-- There is no menu option to force a refresh of the cached vacancy results
-  within a session.
-- The export prompt appears even when the filtered result is empty and there is
-  nothing to write.
 - The PyInstaller spec does not bundle Playwright browser binaries.
 
 ## [0.3.0] - 2026-08-03

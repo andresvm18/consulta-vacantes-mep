@@ -7,9 +7,10 @@ them, and exports the result to a formatted Excel workbook.
 The application interface is in Spanish. Source code, documentation, and commit
 messages are in English.
 
-> **Status: alpha.** The project is being modernized in stages. The current
-> `main` branch is mid-migration and is not yet installable as a package.
-> See [CHANGELOG.md](CHANGELOG.md) for progress.
+> **Status: alpha.** The project is being modernized in stages. Stages 1 to 6
+> are complete: the package installs, the scrapers report progress instead of
+> printing, and the interface is a Typer CLI over a shared application layer.
+> See [CHANGELOG.md](CHANGELOG.md) for detail.
 
 ## What it does
 
@@ -20,7 +21,7 @@ messages are in English.
 
 ## Requirements
 
-- Python 3.11 or newer
+- Python 3.12 or newer
 - Chromium (installed automatically through Playwright on first run)
 
 ## Development setup
@@ -39,9 +40,25 @@ playwright install chromium
 
 ## Usage
 
+Without a subcommand, the interactive menu opens:
+
 ```bash
-python main.py
+consulta-vacantes-mep
 ```
+
+For scripted runs:
+
+```bash
+# Vacancies and the appointments recorded against them
+consulta-vacantes-mep buscar --especialidad "Frances" --anio 2026
+
+# Only what is published, without querying appointments
+consulta-vacantes-mep vacantes --especialidad "Matematica"
+```
+
+`buscar` writes the workbook by default; pass `--sin-exportar` to skip it.
+`vacantes` does the opposite and only writes one when asked with `--exportar`.
+Specialty matching ignores accents and case.
 
 Generated workbooks are written to `outputs/`. Runtime logs are written to
 `logs/`. Both directories are excluded from version control.
@@ -54,7 +71,7 @@ Generated workbooks are written to `outputs/`. Runtime logs are written to
 | 2 | Centralized configuration, paths, and logging |
 | 3 | Typed domain models and header-based table parsing |
 | 4 | Explicit exception hierarchy and retry policy |
-| 5 | Async Playwright, shared browser, condition-based waits |
+| 5 | Thread-per-browser concurrency and condition-based waits |
 | 6 | Application layer with progress events, plus Typer CLI |
 | 7 | Test suite and continuous integration |
 | 8 | pandas-free export layer and personal-data redaction |
