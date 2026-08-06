@@ -1,12 +1,7 @@
-from consulta_vacantes_mep.events import Reporter
+from consulta_vacantes_mep.app.session import SearchResult, Session
 from consulta_vacantes_mep.exports.excel import export_data_to_excel
 from consulta_vacantes_mep.labels import appointment_to_row, vacancy_to_row
-from consulta_vacantes_mep.models import Appointment, QueryOutcome, Vacancy
-from consulta_vacantes_mep.scrapers.appointments import scrape_appointments_for_vacancies
-from consulta_vacantes_mep.scrapers.vacancies import (
-    filter_vacancies_by_specialty,
-    scrape_all_vacancies,
-)
+from consulta_vacantes_mep.models import Appointment, Vacancy
 from consulta_vacantes_mep.utils.console import ConsoleReporter
 from consulta_vacantes_mep.utils.logger import configure_logging
 from consulta_vacantes_mep.utils.menu import ask_year, show_welcome_menu
@@ -15,6 +10,8 @@ from consulta_vacantes_mep.utils.playwright_setup import (
     chromium_is_available,
     install_chromium,
 )
+
+MAX_FAILED_SHOWN = 10
 
 # What each failed outcome means to the user. The check itself reports facts;
 # the wording is a decision for whoever is showing them.
@@ -28,6 +25,7 @@ CHROMIUM_MESSAGES = {
         "Instálelo con: python -m playwright install chromium"
     ),
 }
+
 
 def print_vacancies(vacancies: list[Vacancy]) -> None:
     if not vacancies:
@@ -84,18 +82,39 @@ def ask_export_to_excel(
         print("\nArchivo Excel generado correctamente:")
         print(file_path)
 
-def get_vacancies(cache: list[Vacancy] | None, reporter: Reporter) -> list[Vacancy]:
-    """Return the cached vacancies, scraping every regional office on first use.
 
-    Scraping all offices takes about half a minute. Reusing the result lets the
-    user explore several specialties in one session without paying that cost
-    again. The cache lives for one session only.
+def show_result(result: SearchResult) -> None:
+    print_appointments(result.appointments)
+
+    if not result.failed:
+        return
+
+    print(f"\n⚠  {len(result.failed)} vacantes no se pudieron consultar:")
+
+    for query in result.failed[:MAX_FAILED_SHOWN]:
+        print(f"   {query.vacancy_number}")
+
+    if len(result.failed) > MAX_FAILED_SHOWN:
+        print(f"   ... y {len(result.failed) - MAX_FAILED_SHOWN} más")
+
+
+def run_search(session: Session, specialty: str | None = None) -> None:
+    """Run one search and show it. The only difference between the two menu
+    options is whether a specialty narrows the vacancies down.
     """
-    if cache is not None:
-        print(f"\nUsando {len(cache)} vacantes ya consultadas.")
-        return cache
+    year = ask_year()
 
-    return scrape_all_vacancies(reporter=reporter)
+    if session.cached_count is not None:
+        print(f"\nUsando {session.cached_count} vacantes ya consultadas.")
+
+    print("\nConsultando nombramientos...")
+    result = session.search(year, specialty)
+
+    show_result(result)
+
+    prefix = f"vacantes_{specialty.replace(' ', '_')}" if specialty else "todas_las_vacantes"
+    ask_export_to_excel(result.vacancies, result.appointments, prefix)
+
 
 def prepare_browser() -> bool:
     """Make sure Chromium is usable, reporting to the user if it is not.
@@ -118,17 +137,15 @@ def prepare_browser() -> bool:
     return False
 
 
-def main() -> None:  # noqa: PLR0912  # TODO(stage-6): split into command handlers
+def main() -> None:
     configure_logging()
-    # Initialize the console reporter
-    reporter: Reporter = ConsoleReporter()
+
+    reporter = ConsoleReporter()
 
     if not prepare_browser():
         return
 
-    # Scraping every regional office takes about half a minute. Reuse the
-    # result while the user explores different specialties in one session.
-    cached_vacancies: list[Vacancy] | None = None
+    session = Session(reporter=reporter)
 
     while True:
         option = show_welcome_menu()
@@ -137,77 +154,19 @@ def main() -> None:  # noqa: PLR0912  # TODO(stage-6): split into command handle
         # OPCIÓN 1
         # ==========================================
         if option == "1":
-            cached_vacancies = get_vacancies(cached_vacancies, reporter)
-            vacancies = cached_vacancies
-            year = ask_year()
-            print("\nConsultando nombramientos...")
-
-            queries = scrape_appointments_for_vacancies(
-                vacancies, year=year, headless=True, reporter=reporter
-            )
-
-            appointments = [a for q in queries for a in q.appointments]
-            failed = [q for q in queries if q.outcome is QueryOutcome.FAILED]
-
-            print_appointments(appointments)
-
-            if failed:
-                print(f"\n⚠  {len(failed)} vacantes no se pudieron consultar:")
-                for query in failed[:10]:
-                    print(f"   {query.vacancy_number}")
-                if len(failed) > 10:
-                    print(f"   ... y {len(failed) - 10} más")
-
-            ask_export_to_excel(
-                vacancies,
-                appointments,
-                "todas_las_vacantes"
-            )
+            run_search(session)
 
         # ==========================================
         # OPCIÓN 2
         # ==========================================
         elif option == "2":
-
-            specialty = input(
-                "\nIngrese la especialidad a buscar: "
-            ).strip()
+            specialty = input("\nIngrese la especialidad a buscar: ").strip()
 
             if not specialty:
                 print("\nDebe ingresar una especialidad válida.")
                 continue
 
-            cached_vacancies = get_vacancies(cached_vacancies, reporter)
-
-            filtered_vacancies = filter_vacancies_by_specialty(
-                cached_vacancies,
-                specialty
-            )
-
-            year = ask_year()
-            print("\nConsultando nombramientos...")
-
-            queries = scrape_appointments_for_vacancies(
-                filtered_vacancies, year=year, headless=True, reporter=reporter
-            )
-
-            appointments = [a for q in queries for a in q.appointments]
-            failed = [q for q in queries if q.outcome is QueryOutcome.FAILED]
-
-            print_appointments(appointments)
-
-            if failed:
-                print(f"\n⚠  {len(failed)} vacantes no se pudieron consultar:")
-                for query in failed[:10]:
-                    print(f"   {query.vacancy_number}")
-                if len(failed) > 10:
-                    print(f"   ... y {len(failed) - 10} más")
-
-            ask_export_to_excel(
-                filtered_vacancies,
-                appointments,
-                f"vacantes_{specialty.replace(' ', '_')}"
-            )
+            run_search(session, specialty)
 
         # ==========================================
         # OPCIÓN 3
