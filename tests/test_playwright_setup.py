@@ -39,9 +39,11 @@ class FakeChromium:
         self._browser = browser
         self._error = error
         self.launches = 0
+        self.headless: bool | None = None
 
-    def launch(self, _headless: bool = True) -> FakeBrowser:
+    def launch(self, headless: bool = True) -> FakeBrowser:
         self.launches += 1
+        self.headless = headless
 
         if self._error is not None:
             raise self._error
@@ -114,6 +116,7 @@ def test_a_browser_that_launches_means_chromium_is_available(
 
     assert chromium_is_available() is True
     assert chromium.launches == 1
+    assert chromium.headless is True
 
 
 def test_the_check_closes_the_browser_it_opened(
