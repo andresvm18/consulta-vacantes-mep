@@ -54,8 +54,8 @@ Issues = "https://github.com/andresvm18/consulta-vacantes-mep/issues"
 Changelog = "https://github.com/andresvm18/consulta-vacantes-mep/blob/main/CHANGELOG.md"
 
 
-# Layout src/: el codigo solo es importable si el paquete esta instalado, lo
-# que garantiza que los tests prueben lo mismo que se distribuye.
+# Layout src/: code is only importable when the package is installed, which
+# ensures tests test the same code that gets distributed.
 [tool.hatch.build.targets.wheel]
 packages = ["src/consulta_vacantes_mep"]
 
@@ -71,7 +71,7 @@ include = [
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Ruff: linter y formateador
+#  Ruff: linter and formatter
 # ─────────────────────────────────────────────────────────────────────────────
 [tool.ruff]
 line-length = 100
@@ -88,41 +88,40 @@ select = [
     "B",         # flake8-bugbear
     "A",         # flake8-builtins
     "C4",        # flake8-comprehensions
-    "DTZ",       # flake8-datetimez: detecta datetime.now() sin zona horaria
-    "T20",       # flake8-print: nada de print() fuera de la capa CLI
+    "DTZ",       # flake8-datetimez: detects datetime.now() without timezone
+    "T20",       # flake8-print: no print() outside CLI layer
     "SIM",       # flake8-simplify
     "PTH",       # flake8-use-pathlib
     "RET",       # flake8-return
-    "ARG",       # argumentos sin usar
+    "ARG",       # unused arguments
     "PL",        # pylint
-    "RUF",       # reglas propias de ruff
-    "BLE",       # flake8-blind-except: detecta `except Exception`
-    "S",         # chequeos de seguridad de bandit
+    "RUF",       # ruff's own rules
+    "BLE",       # flake8-blind-except: detects `except Exception`
+    "S",         # bandit security checks
 ]
 
 ignore = [
-    "PLR0913",   # demasiados argumentos
-    "S101",      # assert es legitimo en tests
+    "PLR0913",   # too many arguments
+    "S101",      # assert is legitimate in tests
 
-    # La interfaz esta en espanol: las comillas angulares, la enye y los
-    # caracteres de dibujo de caja son intencionales. Ignorados de forma
-    # permanente, no son deuda tecnica.
+    # The interface is in Spanish: angle quotes, enye, and box-drawing
+    # characters are intentional. Permanently ignored, not technical debt.
     "RUF001",
     "RUF002",
     "RUF003",
 
-    # ── Trinquete progresivo ──────────────────────────────────────────────────
-    # Cada linea de abajo se elimina en la etapa indicada, cuando el codigo que
-    # la viola queda corregido. No agregar entradas nuevas aqui.
-    "E501",      # Etapa 1: firmas largas en los scrapers
-    "PLR2004",   # Etapa 1: los 13 y 8 magicos del conteo de columnas
-    "DTZ005",    # Etapa 3: datetime.now() sin zona horaria
-    "BLE001",    # Etapa 4: except Exception generalizado
-    "S603",      # Etapa 4: subprocess.run en playwright_setup
+    # ── Progressive ratchet ──────────────────────────────────────────────────
+    # Each line below is removed in the indicated stage, when the code that
+    # violates it is fixed. Do not add new entries here.
+    "E501",      # Stage 1: long signatures in scrapers
+    "PLR2004",   # Stage 1: magic 13 and 8 for column counting
+    "DTZ005",    # Stage 3: datetime.now() without timezone
+    "BLE001",    # Stage 4: generalized except Exception
+    "S603",      # Stage 4: subprocess.run in playwright_setup
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Nada en src/ imprime: la interfaz escribe a traves de la consola de Rich.
+# Nothing in src/ prints: the interface writes through Rich's console.
 "tests/**" = ["S", "PLR2004"]
 "scripts/**" = ["T201"]
 
@@ -131,7 +130,7 @@ convention = "google"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Mypy: chequeo estatico de tipos
+#  Mypy: static type checking
 # ─────────────────────────────────────────────────────────────────────────────
 [tool.mypy]
 python_version = "3.12"
@@ -142,13 +141,14 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 no_implicit_optional = true
 check_untyped_defs = true
-disallow_untyped_defs = false   # pasa a true cuando lleguen los modelos (Etapa 3)
+disallow_untyped_defs = false
 show_error_codes = true
 pretty = true
 
 [[tool.mypy.overrides]]
 module = ["playwright.*"]
 ignore_missing_imports = true
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -165,8 +165,8 @@ addopts = [
     "not e2e",
 ]
 markers = [
-    "e2e: consulta el sitio real del MEP; excluido de las corridas por defecto",
-    "slow: tarda mas de unos pocos segundos",
+    "e2e: queries the real MEP site; excluded from default runs",
+    "slow: takes more than a few seconds",
 ]
 
 [tool.coverage.run]
