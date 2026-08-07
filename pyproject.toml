@@ -161,6 +161,8 @@ addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
+    "-m",
+    "not e2e",
 ]
 markers = [
     "e2e: consulta el sitio real del MEP; excluido de las corridas por defecto",
