@@ -155,7 +155,6 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = [
     "consulta_vacantes_mep.parsing",              # Stage 7: _build needs a TypeVar
-    "consulta_vacantes_mep.scrapers.vacancies",   # Stage 7: Regionales TypedDict
     "consulta_vacantes_mep.exports.excel",        # Stage 8: module rewritten without pandas
 ]
 disallow_untyped_defs = false

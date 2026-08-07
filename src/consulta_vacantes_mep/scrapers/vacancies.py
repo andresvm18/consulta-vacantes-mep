@@ -1,3 +1,5 @@
+from typing import TypedDict
+
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, sync_playwright
 
@@ -19,6 +21,18 @@ from consulta_vacantes_mep.utils.logger import get_logger
 from consulta_vacantes_mep.utils.text import normalize_text
 
 logger = get_logger(__name__)
+
+class RegionalOffice(TypedDict):
+    """One entry of the office dropdown.
+
+    'text' is the office name the site publishes and the run reports; 'value'
+    is what the select expects back. Untyped, these were two interchangeable
+    strings in a dict, and passing the wrong one selected nothing while the
+    grid kept showing the previous office's rows.
+    """
+
+    text: str
+    value: str
 
 _OFFICES_LOADED = """(minimum) => {
     const select = document.querySelector('select');
@@ -81,7 +95,7 @@ _GRID_READY = """({ selector, previous, transient }) => {
 }"""
 
 
-def _select_office(page: Page, office: dict) -> None:
+def _select_office(page: Page, office: RegionalOffice) -> None:
     """Select a regional office and wait for the grid to finish showing its rows.
 
     Two things have to be true before the grid can be read, and waiting for
@@ -127,7 +141,7 @@ def _select_office(page: Page, office: dict) -> None:
 _select_office_with_retry = with_retry(_select_office)
 
 
-def _scrape_regional_office(page: Page, office: dict) -> list[Vacancy] | None:
+def _scrape_regional_office(page: Page, office: RegionalOffice) -> list[Vacancy] | None:
     """Scrape one regional office, or return None if it could not be read.
 
     An office that failed and an office with nothing published are different
@@ -150,10 +164,10 @@ def _scrape_regional_office(page: Page, office: dict) -> list[Vacancy] | None:
 
 
 # ── Extraction ────────────────────────────────────────────────────────────────
-def _get_regional_offices(page) -> list[dict]:
+def _get_regional_offices(page: Page) -> list[RegionalOffice]:
     select = page.locator("select").first
     options = select.locator("option")
-    offices = []
+    offices: list[RegionalOffice] = []
 
     for i in range(options.count()):
         text = options.nth(i).inner_text().strip()
