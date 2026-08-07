@@ -141,7 +141,7 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 no_implicit_optional = true
 check_untyped_defs = true
-disallow_untyped_defs = false
+disallow_untyped_defs = true
 show_error_codes = true
 pretty = true
 
@@ -149,6 +149,16 @@ pretty = true
 module = ["playwright.*"]
 ignore_missing_imports = true
 
+# ── Progressive ratchet ──────────────────────────────────────────────────────
+# Each module is removed from this list in the indicated stage, when its code
+# is fully annotated. Do not add new entries here.
+[[tool.mypy.overrides]]
+module = [
+    "consulta_vacantes_mep.parsing",              # Stage 7: _build needs a TypeVar
+    "consulta_vacantes_mep.scrapers.vacancies",   # Stage 7: Regionales TypedDict
+    "consulta_vacantes_mep.exports.excel",        # Stage 8: module rewritten without pandas
+]
+disallow_untyped_defs = false
 
 
 # ─────────────────────────────────────────────────────────────────────────────

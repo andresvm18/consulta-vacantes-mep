@@ -1,6 +1,6 @@
 """Shared fixtures for the test suite."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -27,7 +27,7 @@ def page(browser: Browser) -> Iterator[Page]:
 
 
 @pytest.fixture
-def load_fixture(page: Page):
+def load_fixture(page: Page) -> Callable[[str], Page]:
     """Load a saved HTML fixture into the page and return it."""
     def _load(name: str) -> Page:
         html = (FIXTURE_DIR / name).read_text(encoding="utf-8")

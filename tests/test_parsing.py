@@ -1,5 +1,7 @@
 """Parser behavior against real HTML captured from the MEP sites."""
 
+from collections.abc import Callable
+
 from playwright.sync_api import Page
 
 from consulta_vacantes_mep.parsing import (
@@ -10,6 +12,8 @@ from consulta_vacantes_mep.parsing import (
     parse_vacancies,
 )
 
+LoadFixture = Callable[[str], Page]
+
 
 def test_clean_collapses_whitespace_and_nbsp() -> None:
     assert clean("  MT 4  ") == "MT 4"
@@ -18,7 +22,7 @@ def test_clean_collapses_whitespace_and_nbsp() -> None:
     assert clean(None) == ""
 
 
-def test_parses_appointment_row(load_fixture) -> None:
+def test_parses_appointment_row(load_fixture: LoadFixture) -> None:
     page: Page = load_fixture("appointments_table.html")
     table = page.locator(APPOINTMENTS_TABLE_SELECTOR)
 
@@ -36,7 +40,7 @@ def test_parses_appointment_row(load_fixture) -> None:
     assert appointment.roster_title.endswith("Reclutamiento Insuficiente")
 
 
-def test_appointment_padding_is_trimmed(load_fixture) -> None:
+def test_appointment_padding_is_trimmed(load_fixture: LoadFixture) -> None:
     """The source pads position class with dozens of trailing spaces."""
     page: Page = load_fixture("appointments_table.html")
     table = page.locator(APPOINTMENTS_TABLE_SELECTOR)
@@ -46,13 +50,13 @@ def test_appointment_padding_is_trimmed(load_fixture) -> None:
     assert appointment.position_class == "Profesor de Enseñanza Media (G. de E.)"
 
 
-def test_empty_result_page_has_no_table(load_fixture) -> None:
+def test_empty_result_page_has_no_table(load_fixture: LoadFixture) -> None:
     page: Page = load_fixture("appointments_empty.html")
 
     assert page.locator(APPOINTMENTS_TABLE_SELECTOR).count() == 0
 
 
-def test_parses_vacancy_rows(load_fixture) -> None:
+def test_parses_vacancy_rows(load_fixture: LoadFixture) -> None:
     page: Page = load_fixture("vacancies_table.html")
     table = page.locator(VACANCIES_TABLE_SELECTOR)
 
@@ -66,7 +70,7 @@ def test_parses_vacancy_rows(load_fixture) -> None:
     assert first.lessons == "0"
 
 
-def test_vacancy_hidden_columns_are_excluded(load_fixture) -> None:
+def test_vacancy_hidden_columns_are_excluded(load_fixture: LoadFixture) -> None:
     """Each row carries two hidden cells with no data-label attribute."""
     page: Page = load_fixture("vacancies_table.html")
     table = page.locator(VACANCIES_TABLE_SELECTOR)
@@ -79,7 +83,7 @@ def test_vacancy_hidden_columns_are_excluded(load_fixture) -> None:
         assert vacancy.lessons != "09600"
 
 
-def test_vacancy_text_matches_the_dom_not_the_aria_label(load_fixture) -> None:
+def test_vacancy_text_matches_the_dom_not_the_aria_label(load_fixture: LoadFixture) -> None:
     """The source capitalizes cell text server-side; aria-label keeps the original.
 
     We extract the visible cell text, which is what the site publishes in the
@@ -96,7 +100,7 @@ def test_vacancy_text_matches_the_dom_not_the_aria_label(load_fixture) -> None:
     assert not any("de Servicio Civil" in c for c in classes)
 
 
-def test_parse_appointments_on_missing_table_returns_empty(load_fixture) -> None:
+def test_parse_appointments_on_missing_table_returns_empty(load_fixture: LoadFixture) -> None:
     """The parser must not raise when the grid was never rendered."""
     page: Page = load_fixture("appointments_empty.html")
     table = page.locator(APPOINTMENTS_TABLE_SELECTOR)

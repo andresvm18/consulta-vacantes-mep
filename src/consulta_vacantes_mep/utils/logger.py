@@ -11,6 +11,7 @@ themselves. Configuration happens once, from the entry point.
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from rich.console import Console
 from rich.logging import RichHandler
@@ -27,7 +28,7 @@ _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 _ROOT_LOGGER_NAME = "consulta_vacantes_mep"
 
 
-def _build_file_handler(path, level: int) -> RotatingFileHandler:
+def _build_file_handler(path: Path, level: int) -> RotatingFileHandler:
     """Create a size-limited file handler that keeps a few old copies."""
     handler = RotatingFileHandler(
         path,
