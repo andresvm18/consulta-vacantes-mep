@@ -40,6 +40,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Subcommands `buscar` and `vacantes`. Running with no subcommand still opens
   the interactive menu.
 - Menu option to refresh the cached vacancy list within a session.
+- Continuous integration: ruff, mypy, and the test suite run on every push and
+  pull request, on the lowest supported Python version and on 3.13.
+- Test coverage for the layers stage 6 introduced and left unverified: the
+  session cache, the Rich reporter, the Chromium check and installer, and the
+  Typer subcommands. The suite went from 26 tests to 110 and still needs no
+  network, since the browser-facing pieces run against captured HTML or
+  doubles.
+- Tests describing the exported workbook rather than the code that writes it,
+  so removing pandas in stage 8 is verifiable instead of a leap of faith.
+- Detection of client-side pagination in the vacancies grid. MudBlazor keeps
+  later pages out of the DOM entirely, so an office spanning more than one page
+  would have been read as a subset with nothing to indicate it. Every office
+  observed so far fits on one page; a run that finds otherwise now says so.
 
 ### Changed
 
@@ -80,6 +93,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The menu moved into the `cli` package and `utils/console.py` was removed.
   Nothing under `src/` prints any more, so the linter exemptions for `print`
   are gone rather than relocated.
+- Tables are read in a single browser evaluation instead of one round trip per
+  cell. Measured against the captured fixture, 250 milliseconds per table down
+  to 7.5, and the gap widens with the number of rows. Speed is the smaller
+  half: every one of those reads hit a DOM Blazor can re-render between any two
+  of them, so a row could be counted under one office and read under the next.
+- Type annotations are required across the codebase, with a shrinking list of
+  exempt modules that mirrors the linter's. Only the export layer remains, and
+  it is rewritten in stage 8.
+- Regional office dropdown entries carry a `TypedDict` instead of a bare
+  `dict`. The name and the value the select expects were interchangeable
+  strings; confusing them selects nothing while the grid keeps showing the
+  previous office's rows.
 
 ### Fixed
 
@@ -117,6 +142,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known issues
 
+- The appointments sheet is written with no column headers when a search finds
+  vacancies but no appointments, which reads as a broken export rather than an
+  empty result. The behavior is pinned by a test so the stage 8 rewrite changes
+  it deliberately.
 - The PyInstaller spec does not bundle Playwright browser binaries.
 
 ## [0.3.0] - 2026-08-03

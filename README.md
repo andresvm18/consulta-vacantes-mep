@@ -1,5 +1,7 @@
 # Consulta Vacantes MEP
 
+[![CI](https://github.com/andresvm18/consulta-vacantes-mep/actions/workflows/ci.yml/badge.svg)](https://github.com/andresvm18/consulta-vacantes-mep/actions/workflows/ci.yml)
+
 Unofficial desktop tool that collects teaching vacancies and appointments
 published by the Ministerio de Educación Pública (MEP) of Costa Rica, enriches
 them, and exports the result to a formatted Excel workbook.
@@ -7,9 +9,10 @@ them, and exports the result to a formatted Excel workbook.
 The application interface is in Spanish. Source code, documentation, and commit
 messages are in English.
 
-> **Status: alpha.** The project is being modernized in stages. Stages 1 to 6
+> **Status: alpha.** The project is being modernized in stages. Stages 1 to 7
 > are complete: the package installs, the scrapers report progress instead of
-> printing, and the interface is a Typer CLI over a shared application layer.
+> printing, the interface is a Typer CLI over a shared application layer, and
+> every push runs the linter, the type checker, and 110 tests.
 > See [CHANGELOG.md](CHANGELOG.md) for detail.
 
 ## What it does
@@ -37,6 +40,17 @@ source .venv/bin/activate     # macOS / Linux
 pip install -e ".[dev]"
 playwright install chromium
 ```
+
+The three checks CI runs, in the order it runs them:
+
+```bash
+ruff check .
+mypy
+pytest
+```
+
+The suite needs no network. Tests that would query the live MEP site carry the
+`e2e` marker and are excluded by default; run them with `pytest -m e2e`.
 
 ## Usage
 
