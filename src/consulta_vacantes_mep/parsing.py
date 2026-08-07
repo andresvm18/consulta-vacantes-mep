@@ -5,18 +5,24 @@ Blazor vacancies grid, data-title on the WebForms appointments grid. Parsing by
 that attribute rather than by position makes extraction immune to added,
 reordered, or hidden columns.
 
-Cell text is read with text_content() rather than inner_text(): the vacancies
-grid applies a CSS text transform, so the rendered text differs from the value
+Cell text is read from textContent rather than rendered text: the vacancies
+grid applies a CSS text transform, so what is displayed differs from the value
 the site actually published.
+
+The whole table is read in a single evaluation. The previous version walked
+locators cell by cell, which made every read a separate round trip against a
+DOM that Blazor can re-render between any two of them, so a row could be
+counted under one office and read under the next. One snapshot removes the race
+instead of narrowing the window it happens in.
 """
 
 import re
+from typing import TypedDict, cast
 
 from playwright.sync_api import Locator
 
 from consulta_vacantes_mep.labels import APPOINTMENT_LABELS, VACANCY_LABELS
 from consulta_vacantes_mep.models import Appointment, Vacancy
-from consulta_vacantes_mep.settings import SCRAPING
 from consulta_vacantes_mep.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -28,6 +34,52 @@ VACANCY_CELL_ATTRIBUTE = "data-label"
 APPOINTMENT_CELL_ATTRIBUTE = "data-title"
 
 _WHITESPACE = re.compile(r"\s+")
+
+
+class RowSnapshot(TypedDict):
+    """One row as it stood at the instant the snapshot was taken.
+
+    The html is kept so a row that yielded no labelled cells can be reported as
+    what it actually was. That is how the transient MudBlazor placeholders were
+    identified in the first place.
+    """
+
+    values: dict[str, str]
+    html: str
+
+
+class TableSnapshot(TypedDict):
+    """A whole grid, plus whether the site is showing only part of it."""
+
+    rows: list[RowSnapshot]
+    has_more_pages: bool
+
+
+# Read in the browser in one pass, so every row comes from the same instant.
+# MudBlazor paginates client side, so a Next button that is present and enabled
+# means rows exist that this table is not currently showing.
+_TABLE_SNAPSHOT = """(tables, attribute) => {
+    const table = tables[0];
+    if (!table) return { rows: [], has_more_pages: false };
+
+    const rows = Array.from(table.querySelectorAll('tbody tr')).map((row) => {
+        const values = {};
+
+        for (const cell of row.querySelectorAll('td[' + attribute + ']')) {
+            const column = cell.getAttribute(attribute);
+            if (column) values[column] = cell.textContent || '';
+        }
+
+        return { values, html: row.outerHTML.slice(0, 300) };
+    });
+
+    const wrapper = table.closest('.mud-table');
+    const next = wrapper
+        ? wrapper.querySelector('.mud-table-pagination button[aria-label="Next page"]')
+        : null;
+
+    return { rows, has_more_pages: Boolean(next) && !next.disabled };
+}"""
 
 
 def clean(text: str | None) -> str:
@@ -43,22 +95,26 @@ def clean(text: str | None) -> str:
     return _WHITESPACE.sub(" ", text).strip()
 
 
-def _row_by_column_attribute(row: Locator, attribute: str) -> dict[str, str]:
-    """Map a row's cells to their declared column names."""
-    cells = row.locator(f"td[{attribute}]")
-    values: dict[str, str] = {}
+def _snapshot(table: Locator, attribute: str) -> TableSnapshot:
+    """Read the entire table in one round trip.
 
-    for i in range(cells.count()):
-        cell = cells.nth(i)
-        column = cell.get_attribute(attribute, timeout=SCRAPING.cell_timeout_ms)
-
-        if column:
-            values[clean(column)] = clean(cell.text_content())
-
-    return values
+    evaluate_all rather than evaluate, so a grid that was never rendered comes
+    back empty instead of raising. The appointments site renders no table at
+    all when a vacancy has no appointments.
+    """
+    return cast("TableSnapshot", table.evaluate_all(_TABLE_SNAPSHOT, attribute))
 
 
-def _build(model, labels: dict[str, str], values: dict[str, str], context: str):
+def _cleaned(row: RowSnapshot) -> dict[str, str]:
+    return {clean(column): clean(value) for column, value in row["values"].items()}
+
+
+def _build[ModelT: (Vacancy, Appointment)](
+    model: type[ModelT],
+    labels: dict[str, str],
+    values: dict[str, str],
+    context: str,
+) -> ModelT | None:
     """Instantiate a model from label-keyed values, or return None with a reason."""
     missing = [label for label in labels.values() if label not in values]
 
@@ -73,20 +129,31 @@ def _build(model, labels: dict[str, str], values: dict[str, str], context: str):
 
 def parse_vacancies(table: Locator, regional_office: str) -> list[Vacancy]:
     """Extract vacancies from one regional office's results grid."""
-    rows = table.locator("tbody tr")
+    snapshot = _snapshot(table, VACANCY_CELL_ATTRIBUTE)
+    rows = snapshot["rows"]
     vacancies: list[Vacancy] = []
-    logger.debug("%s: grid has %d rows", regional_office, rows.count())
 
-    for i in range(rows.count()):
-        values = _row_by_column_attribute(rows.nth(i), VACANCY_CELL_ATTRIBUTE)
+    logger.debug("%s: grid has %d rows", regional_office, len(rows))
+
+    if snapshot["has_more_pages"]:
+        # Never seen on the live site, where every office has fit on one page.
+        # Reported rather than paged through: a warning that never fires
+        # settles the question for free, and one that does fire says the run is
+        # dropping rows, which is worth knowing before writing the code to
+        # click through them.
+        logger.warning(
+            "%s: the grid has more pages; only the first was read", regional_office
+        )
+
+    for index, row in enumerate(rows):
+        values = _cleaned(row)
 
         if not values:
-            row = rows.nth(i)
             logger.warning(
                 "%s: skipping row %d with no labelled cells: %s",
                 regional_office,
-                i,
-                clean(row.evaluate("node => node.outerHTML"))[:300],
+                index,
+                clean(row["html"]),
             )
             continue
 
@@ -100,11 +167,10 @@ def parse_vacancies(table: Locator, regional_office: str) -> list[Vacancy]:
 
 def parse_appointments(table: Locator, vacancy_number: str) -> list[Appointment]:
     """Extract appointments from the results grid for one vacancy number."""
-    rows = table.locator("tbody tr")
     appointments: list[Appointment] = []
 
-    for i in range(rows.count()):
-        values = _row_by_column_attribute(rows.nth(i), APPOINTMENT_CELL_ATTRIBUTE)
+    for row in _snapshot(table, APPOINTMENT_CELL_ATTRIBUTE)["rows"]:
+        values = _cleaned(row)
 
         if not values:
             continue

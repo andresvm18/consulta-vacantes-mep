@@ -5,8 +5,11 @@ from collections.abc import Callable
 from playwright.sync_api import Page
 
 from consulta_vacantes_mep.parsing import (
+    APPOINTMENT_CELL_ATTRIBUTE,
     APPOINTMENTS_TABLE_SELECTOR,
     VACANCIES_TABLE_SELECTOR,
+    VACANCY_CELL_ATTRIBUTE,
+    _snapshot,
     clean,
     parse_appointments,
     parse_vacancies,
@@ -106,3 +109,53 @@ def test_parse_appointments_on_missing_table_returns_empty(load_fixture: LoadFix
     table = page.locator(APPOINTMENTS_TABLE_SELECTOR)
 
     assert parse_appointments(table, "1538058") == []
+
+
+# ── Pagination ────────────────────────────────────────────────────────────────
+_PAGED_GRID = """
+<div class="mud-table">
+  <div class="mud-table-container">
+    <table class="mud-table-root"><tbody>
+      <tr><td data-label="Vacante">1531185</td></tr>
+    </tbody></table>
+  </div>
+  <div class="mud-table-pagination">
+    <button aria-label="Previous page" disabled></button>
+    <button aria-label="Next page"></button>
+  </div>
+</div>
+"""
+
+
+def test_a_captured_office_fits_on_one_page(load_fixture: LoadFixture) -> None:
+    """Both pagination buttons are disabled in the capture, so nothing is hidden.
+
+    This is the case the scraper has always assumed and never checked.
+    """
+    page: Page = load_fixture("vacancies_table.html")
+    table = page.locator(VACANCIES_TABLE_SELECTOR)
+
+    assert _snapshot(table, VACANCY_CELL_ATTRIBUTE)["has_more_pages"] is False
+
+
+def test_an_enabled_next_button_means_rows_are_hidden(page: Page) -> None:
+    """Synthetic, because no office observed so far has produced a second page.
+
+    MudBlazor paginates client side, so the rows on later pages are not in the
+    DOM at all and reading the table would silently return a subset.
+    """
+    page.set_content(_PAGED_GRID)
+    table = page.locator(VACANCIES_TABLE_SELECTOR)
+
+    assert _snapshot(table, VACANCY_CELL_ATTRIBUTE)["has_more_pages"] is True
+
+
+def test_a_grid_that_was_never_rendered_reads_as_empty(load_fixture: LoadFixture) -> None:
+    """evaluate_all over zero matches, rather than evaluate raising."""
+    page: Page = load_fixture("appointments_empty.html")
+    table = page.locator(APPOINTMENTS_TABLE_SELECTOR)
+
+    assert _snapshot(table, APPOINTMENT_CELL_ATTRIBUTE) == {
+        "rows": [],
+        "has_more_pages": False,
+    }

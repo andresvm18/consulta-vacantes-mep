@@ -154,7 +154,6 @@ ignore_missing_imports = true
 # is fully annotated. Do not add new entries here.
 [[tool.mypy.overrides]]
 module = [
-    "consulta_vacantes_mep.parsing",              # Stage 7: _build needs a TypeVar
     "consulta_vacantes_mep.exports.excel",        # Stage 8: module rewritten without pandas
 ]
 disallow_untyped_defs = false
