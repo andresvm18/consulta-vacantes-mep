@@ -5,7 +5,11 @@ import pandas as pd
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from consulta_vacantes_mep.labels import appointment_to_row, vacancy_to_row
+from consulta_vacantes_mep.labels import (
+    APPOINTMENT_LABELS,
+    appointment_to_row,
+    vacancy_to_row,
+)
 from consulta_vacantes_mep.models import Appointment, Vacancy
 from consulta_vacantes_mep.settings import EXPORT
 from consulta_vacantes_mep.utils.logger import get_logger
@@ -63,7 +67,8 @@ def export_data_to_excel(
 
     vacancies_df = pd.DataFrame([vacancy_to_row(v) for v in vacancies])
     appointments_df = pd.DataFrame(
-        [appointment_to_row(a) for a in appointments or []]
+        [appointment_to_row(a) for a in appointments or []],
+        columns=list(APPOINTMENT_LABELS.values()),
     )
 
     with pd.ExcelWriter(file_path, engine="openpyxl") as writer:

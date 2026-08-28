@@ -188,18 +188,24 @@ def test_every_appointment_gets_a_row() -> None:
     assert _sheet(path, "Nombramientos").max_row == len(appointments) + 1
 
 
-def test_an_appointments_sheet_with_nothing_in_it_has_no_headers() -> None:
-    """Current behaviour, pinned rather than endorsed.
+def test_an_appointments_sheet_with_nothing_in_it_still_names_its_columns() -> None:
+    """A search can legitimately find vacancies nobody has been appointed to.
 
-    A search where nobody was appointed yet produces a sheet with no column
-    names at all, which reads as a broken export rather than an empty result.
-    Worth revisiting when pandas comes out in Etapa 8; until then a rewrite
-    should know it is changing this on purpose.
+    That result has to look like an empty table rather than a damaged file, so
+    the headings are written whether or not there is anything under them.
     """
     path = export_data_to_excel(PUBLISHED)
 
     assert path is not None
-    assert _row(_sheet(path, "Nombramientos"), 1) == [None]
+    assert _row(_sheet(path, "Nombramientos"), 1) == list(APPOINTMENT_LABELS.values())
+
+
+def test_an_empty_appointments_sheet_holds_only_its_headers() -> None:
+    """Headings without rows, not a blank row pretending to be an appointment."""
+    path = export_data_to_excel(PUBLISHED)
+
+    assert path is not None
+    assert _sheet(path, "Nombramientos").max_row == 1
 
 
 # ── The formatting ────────────────────────────────────────────────────────────
