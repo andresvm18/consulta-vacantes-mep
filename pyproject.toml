@@ -26,7 +26,6 @@ classifiers = [
 
 dependencies = [
     "playwright>=1.49,<2.0",
-    "pandas>=2.2,<3.0",
     "openpyxl>=3.1,<4.0",
     "tenacity>=9.0,<10.0",
     "typer>=0.15,<1.0",
@@ -41,7 +40,6 @@ dev = [
     "ruff>=0.8,<1.0",
     "mypy>=1.13,<2.0",
     "pre-commit>=4.0,<5.0",
-    "pandas-stubs",
     "types-openpyxl",
 ]
 
@@ -149,14 +147,8 @@ pretty = true
 module = ["playwright.*"]
 ignore_missing_imports = true
 
-# ── Progressive ratchet ──────────────────────────────────────────────────────
-# Each module is removed from this list in the indicated stage, when its code
-# is fully annotated. Do not add new entries here.
-[[tool.mypy.overrides]]
-module = [
-    "consulta_vacantes_mep.exports.excel",        # Stage 8: module rewritten without pandas
-]
-disallow_untyped_defs = false
+# The per-module ratchet that carried the unannotated modules is gone: every
+# module under src/ and tests/ is checked under the settings above.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
