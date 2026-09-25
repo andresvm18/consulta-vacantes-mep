@@ -113,7 +113,6 @@ ignore = [
     # violates it is fixed. Do not add new entries here.
     "E501",      # Stage 1: long signatures in scrapers
     "PLR2004",   # Stage 1: magic 13 and 8 for column counting
-    "DTZ005",    # Stage 3: datetime.now() without timezone
     "BLE001",    # Stage 4: generalized except Exception
     "S603",      # Stage 4: subprocess.run in playwright_setup
 ]
