@@ -6,6 +6,11 @@ that isolates failures for quick inspection.
 
 Modules obtain a logger with get_logger(__name__) and never configure handlers
 themselves. Configuration happens once, from the entry point.
+
+Everything written is stripped of national identification numbers first. A log
+file outlives the run that produced it, and the appointments registry attaches
+a cédula to every record, so a message quoting a row or a failure can carry one
+into a file nobody thinks of as personal data.
 """
 
 import logging
@@ -18,6 +23,7 @@ from rich.logging import RichHandler
 
 from consulta_vacantes_mep.settings import LOGGING
 from consulta_vacantes_mep.utils.paths import LOG_DIR
+from consulta_vacantes_mep.utils.redaction import redact_national_ids
 
 LOG_FILE = LOG_DIR / "activity.log"
 ERROR_FILE = LOG_DIR / "errors.log"
@@ -26,6 +32,25 @@ _FILE_FORMAT = "[%(asctime)s] %(levelname)-8s %(name)s: %(message)s"
 _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 _ROOT_LOGGER_NAME = "consulta_vacantes_mep"
+
+
+class RedactingFormatter(logging.Formatter):
+    """A formatter that removes national ids from the line it produces.
+
+    This is a formatter rather than a filter, which is the obvious choice and
+    the wrong one. A filter attached to the package logger never runs for
+    records from its children, and every module here logs through
+    get_logger(__name__), so almost nothing would pass through it. A filter
+    attached to each handler does run, but it runs before the traceback exists:
+    record.exc_text is still None at that point, so an id inside an exception
+    would reach the file untouched.
+
+    A formatter sees the finished line, traceback included, which is exactly
+    the text about to be written.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        return redact_national_ids(super().format(record))
 
 
 def _build_file_handler(path: Path, level: int) -> RotatingFileHandler:
@@ -37,7 +62,7 @@ def _build_file_handler(path: Path, level: int) -> RotatingFileHandler:
         encoding="utf-8",
     )
     handler.setLevel(level)
-    handler.setFormatter(logging.Formatter(_FILE_FORMAT, datefmt=_DATE_FORMAT))
+    handler.setFormatter(RedactingFormatter(_FILE_FORMAT, datefmt=_DATE_FORMAT))
     return handler
 
 
@@ -62,7 +87,7 @@ def _build_screen_handler(console: Console | None) -> logging.Handler | None:
             show_path=False,
             markup=False,
         )
-        rich_handler.setFormatter(logging.Formatter("%(message)s"))
+        rich_handler.setFormatter(RedactingFormatter("%(message)s"))
         return rich_handler
 
     if sys.stderr is None:
@@ -70,7 +95,7 @@ def _build_screen_handler(console: Console | None) -> logging.Handler | None:
 
     handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(logging.WARNING)
-    handler.setFormatter(logging.Formatter("  %(levelname)s: %(message)s"))
+    handler.setFormatter(RedactingFormatter("  %(levelname)s: %(message)s"))
     return handler
 
 
