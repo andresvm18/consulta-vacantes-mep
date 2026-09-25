@@ -7,14 +7,21 @@ imitating its shape would only prove the imitation was right.
 """
 
 import importlib
+from io import StringIO
 from typing import ClassVar
 
 import pytest
+from rich.console import Console
 from typer.testing import CliRunner, Result
 
 from consulta_vacantes_mep.app.session import SearchResult
-from consulta_vacantes_mep.cli.main import app, prepare_browser
-from consulta_vacantes_mep.models import Vacancy
+from consulta_vacantes_mep.cli.main import app, prepare_browser, show_result
+from consulta_vacantes_mep.models import (
+    Appointment,
+    AppointmentQuery,
+    QueryOutcome,
+    Vacancy,
+)
 from consulta_vacantes_mep.utils.playwright_setup import ChromiumCheck, ChromiumStatus
 
 # See tests/cli/conftest.py for why this is not a plain import.
@@ -293,3 +300,107 @@ def test_vacantes_has_no_personal_data_flag(runner: CliRunner) -> None:
     result = _invoke(runner, "vacantes", "--datos-personales")
 
     assert result.exit_code != 0
+
+
+# ── What show_result puts on the terminal ─────────────────────────────────────
+CEDULA = "102340567"
+
+
+def _appointment(vacancy_number: str) -> Appointment:
+    """An appointment carrying an obviously invented national id."""
+    return Appointment(
+        vacancy_number=vacancy_number,
+        national_id=CEDULA,
+        full_name="Persona De Prueba",
+        institution="Liceo de Prueba",
+        position_class="Profesor de Enseñanza Media",
+        specialty="Francés",
+        group="MT 4",
+        position_number="12345",
+        starts_on="05/08/2026",
+        ends_on="31/12/2026",
+        status="Activo",
+        eligibility_rating="No Consta",
+        roster_title="Nómina de prueba",
+    )
+
+
+def _found(*numbers: str) -> SearchResult:
+    return SearchResult(
+        vacancies=PUBLISHED,
+        queries=[
+            AppointmentQuery(n, QueryOutcome.FOUND, [_appointment(n)]) for n in numbers
+        ],
+    )
+
+
+@pytest.fixture
+def screen(monkeypatch: pytest.MonkeyPatch) -> StringIO:
+    """A console wide enough that Rich does not abbreviate the table."""
+    buffer = StringIO()
+    monkeypatch.setattr(main_module, "console", Console(file=buffer, width=200))
+    return buffer
+
+
+def test_the_identification_number_stays_off_the_terminal(screen: StringIO) -> None:
+    """Scrollback outlives the run, and nobody consults this to find one."""
+    show_result(_found("1531185"))
+
+    assert CEDULA not in screen.getvalue()
+
+
+def test_the_name_is_shown(screen: StringIO) -> None:
+    """Whether a post was filled, and by whom, is the question being asked."""
+    show_result(_found("1531185"))
+
+    assert "Persona De Prueba" in screen.getvalue()
+
+
+def test_each_appointment_takes_one_line(screen: StringIO) -> None:
+    """Thirteen fields each on their own line made fifty appointments into six
+    hundred lines of terminal."""
+    show_result(_found("1531185", "1536996", "1538058"))
+
+    rows = [line for line in screen.getvalue().splitlines() if "Persona De Prueba" in line]
+
+    assert len(rows) == 3
+
+
+def test_the_columns_are_the_ones_worth_scanning(screen: StringIO) -> None:
+    show_result(_found("1531185"))
+
+    written = screen.getvalue()
+
+    for heading in ("Vacante", "Nombre", "Institución", "Especialidad", "Rige", "Vence"):
+        assert heading in written
+
+
+def test_the_rest_of_the_record_is_left_to_the_workbook(screen: StringIO) -> None:
+    """Six columns of thirteen. The others are not worth a terminal column."""
+    show_result(_found("1531185"))
+
+    written = screen.getvalue()
+
+    assert "No Consta" not in written
+    assert "Nómina de prueba" not in written
+
+
+def test_nothing_found_says_so(screen: StringIO) -> None:
+    show_result(SearchResult(vacancies=PUBLISHED, queries=[]))
+
+    assert "No se encontraron nombramientos" in screen.getvalue()
+
+
+def test_a_failed_lookup_is_still_reported(screen: StringIO) -> None:
+    """A query that could not be completed must not look like an absence."""
+    result = SearchResult(
+        vacancies=PUBLISHED,
+        queries=[AppointmentQuery("1536996", QueryOutcome.FAILED, [], "timeout")],
+    )
+
+    show_result(result)
+
+    written = screen.getvalue()
+
+    assert "1536996" in written
+    assert "no se pudieron consultar" in written

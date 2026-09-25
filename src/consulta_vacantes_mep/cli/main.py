@@ -15,7 +15,6 @@ from consulta_vacantes_mep.app.session import SearchResult, Session
 from consulta_vacantes_mep.cli.menu import ask_year, show_welcome_menu
 from consulta_vacantes_mep.cli.reporter import RichReporter
 from consulta_vacantes_mep.exports.excel import export_data_to_excel
-from consulta_vacantes_mep.labels import appointment_to_row
 from consulta_vacantes_mep.models import Appointment, Vacancy
 from consulta_vacantes_mep.settings import EXPORT, default_year
 from consulta_vacantes_mep.utils.logger import configure_logging
@@ -69,19 +68,40 @@ def prepare_browser() -> bool:
 
 
 def show_result(result: SearchResult) -> None:
-    """List the appointments found, and which lookups could not be completed."""
+    """List the appointments found, and which lookups could not be completed.
+
+    Six columns of the thirteen, the way show_vacancies picks four of eight:
+    enough to answer whether a post was filled and by whom, with the full
+    record left to the workbook. The cédula is not among them. Nobody consults
+    this to find out somebody's identification number, and fifty of them on a
+    terminal live on in scrollback.
+    """
     if not result.appointments:
         console.print("\n  No se encontraron nombramientos.")
     else:
-        console.print(f"\n  [bold]Nombramientos encontrados: {len(result.appointments)}[/bold]")
+        table = Table(
+            title=f"Nombramientos encontrados: {len(result.appointments)}",
+            title_justify="left",
+        )
+        table.add_column("Vacante")
+        table.add_column("Nombre")
+        table.add_column("Institución")
+        table.add_column("Especialidad")
+        table.add_column("Rige")
+        table.add_column("Vence")
 
         for appointment in result.appointments:
-            console.print()
+            table.add_row(
+                appointment.vacancy_number,
+                appointment.full_name,
+                appointment.institution,
+                appointment.specialty,
+                appointment.starts_on,
+                appointment.ends_on,
+            )
 
-            row = appointment_to_row(appointment, include_personal=True)
-
-            for label, value in row.items():
-                console.print(f"  {label}: {value}")
+        console.print()
+        console.print(table)
 
     if not result.failed:
         return
