@@ -9,10 +9,11 @@ them, and exports the result to a formatted Excel workbook.
 The application interface is in Spanish. Source code, documentation, and commit
 messages are in English.
 
-> **Status: alpha.** The project is being modernized in stages. Stages 1 to 7
+> **Status: alpha.** The project is being modernized in stages. Stages 1 to 8
 > are complete: the package installs, the scrapers report progress instead of
-> printing, the interface is a Typer CLI over a shared application layer, and
-> every push runs the linter, the type checker, and 110 tests.
+> printing, the interface is a Typer CLI over a shared application layer, the
+> workbook is written without pandas and leaves personal data out unless asked
+> for, and every push runs the linter, the type checker, and 187 tests.
 > See [CHANGELOG.md](CHANGELOG.md) for detail.
 
 ## What it does
@@ -74,6 +75,16 @@ consulta-vacantes-mep vacantes --especialidad "Matematica"
 `vacantes` does the opposite and only writes one when asked with `--exportar`.
 Specialty matching ignores accents and case.
 
+The workbook leaves out the cédula and the name unless asked for:
+
+```bash
+consulta-vacantes-mep buscar --datos-personales
+```
+
+`CVM_EXPORT_PERSONAL_DATA=1` sets that default for every interface. The results
+shown on screen name the person appointed but never their cédula, and the log
+files carry no identification numbers at all.
+
 Generated workbooks are written to `outputs/`. Runtime logs are written to
 `logs/`. Both directories are excluded from version control.
 
@@ -95,8 +106,11 @@ Generated workbooks are written to `outputs/`. Runtime logs are written to
 ## Privacy and legal
 
 This is an independent project with no affiliation to the MEP or any government
-body. It reads publicly accessible pages only. The appointments registry
-contains personal data; see [NOTICE](NOTICE) for the full data-handling
+body. It reads publicly accessible pages only.
+
+The appointments registry publishes a cédula and a full name with every record.
+Neither reaches an exported workbook unless asked for, and no identification
+number reaches a log file. See [NOTICE](NOTICE) for the full data-handling
 statement and third-party attributions.
 
 ## License

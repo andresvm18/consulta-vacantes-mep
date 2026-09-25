@@ -71,9 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workbook that would look like a legitimate result.
 - Raised the minimum Python version to 3.12. mypy could not analyze the project
   at all under a 3.11 target because numpy's stubs use PEP 695 syntax.
-- `NOTICE` data-handling section now describes current behavior rather than
-  planned behavior. The redaction and export-exclusion guarantees will be
-  restored once implemented.
 - Scraping waits on conditions rather than fixed delays throughout. A full run
   dropped from roughly 143 seconds to under 25. Normalized, because the site
   publishes a different number of vacancies from one hour to the next: about
@@ -98,13 +95,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to 7.5, and the gap widens with the number of rows. Speed is the smaller
   half: every one of those reads hit a DOM Blazor can re-render between any two
   of them, so a row could be counted under one office and read under the next.
-- Type annotations are required across the codebase, with a shrinking list of
-  exempt modules that mirrors the linter's. Only the export layer remains, and
-  it is rewritten in stage 8.
+- Type annotations are required across the codebase. The list of exempt modules
+  that mirrored the linter's is now empty: the export layer was the last entry,
+  and removing it exposed two annotations pandas had been hiding behind it.
 - Regional office dropdown entries carry a `TypedDict` instead of a bare
   `dict`. The name and the value the select expects were interchangeable
   strings; confusing them selects nothing while the grid keeps showing the
   previous office's rows.
+- The workbook is written with openpyxl directly. pandas built two frames and
+  handed them to a writer that used openpyxl underneath, and every sheet was
+  reopened afterwards to be formatted by hand, so its only job here was turning
+  a list of dicts into rows. It and NumPy measure about a hundred megabytes
+  installed, which the frozen build has to carry. Both writers were run over
+  the same records and compared cell by cell: values, cell types, dimensions,
+  column widths, frozen panes, autofilter range and header styling all match.
+- Search results are shown as a table of six columns rather than all thirteen
+  fields of every appointment, one per line. Fifty appointments made seven
+  hundred lines of terminal, and the cédula was among them. The name stays,
+  since whether a post was filled and by whom is the question being asked.
+- `DTZ005` is gone from the linter ratchet, which now has four entries. The
+  rule was silenced in stage 1 and the code it pointed at was fixed in stage 3,
+  but the line stayed, so the check was off for three stages with nothing left
+  to report.
 
 ### Fixed
 
@@ -139,13 +151,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as zero vacancies, and counted separately in the run summary.
 - The stderr log handler is only attached when there is a stderr to write to.
 - The export prompt no longer appears when the search found nothing.
+- The appointments sheet names its columns even when a search finds vacancies
+  nobody has been appointed to. A frame built from rows alone carries no
+  columns, so there was no heading row to write and the result read as a
+  damaged file rather than an empty table.
+- `NOTICE` lists Typer, Rich and tenacity among the components a distribution
+  bundles. They had been under planned dependencies since stage 6, alongside
+  pydantic-settings and httpx, which were never adopted and are now removed.
 
 ### Known issues
 
-- The appointments sheet is written with no column headers when a search finds
-  vacancies but no appointments, which reads as a broken export rather than an
-  empty result. The behavior is pinned by a test so the stage 8 rewrite changes
-  it deliberately.
+- Names are not removed from log output. No pattern can tell one from an
+  institution or a regional office name, so the only defence is not logging a
+  row that carries one. Nothing does today.
+- `NOTICE` does not list the transitive dependencies a frozen build bundles
+  through Typer and Rich: Click, Pygments, markdown-it-py, mdurl, shellingham,
+  annotated-doc, and typing_extensions through pyee.
 - The PyInstaller spec does not bundle Playwright browser binaries.
 
 ## [0.3.0] - 2026-08-03
@@ -160,6 +181,18 @@ Baseline snapshot of the pre-modernization codebase, tagged as `v0.3.0-legacy`.
 - Excel export with styled headers, frozen panes, and auto-fit columns.
 - Interactive console menu.
 - PyInstaller spec for Windows distribution.
+- Personal data is left out of exported workbooks unless asked for. The
+  appointments sheet carries neither the cédula nor the name by default, since
+  a workbook is a file that gets forwarded and the other eleven columns already
+  answer whether a post was filled. `--datos-personales` asks for them, and
+  `CVM_EXPORT_PERSONAL_DATA` sets the default for every interface, so the
+  planned GUI inherits the policy rather than reimplementing it.
+- National identification numbers are removed from everything written to the
+  log files and the terminal, tracebacks included. A log file outlives the run
+  that produced it, and the registry attaches a cédula to every record.
+- Test coverage for the three modules that decide what may leave the program:
+  the labels, the redaction pattern, and the logging configuration that applies
+  it. The suite went from 110 tests to 187.
 
 ### Known issues
 

@@ -1,4 +1,4 @@
-+Consulta Vacantes MEP
+Consulta Vacantes MEP
 Copyright 2025-2026 Andrés Víquez Marchena
 
 This product includes software developed by Andrés Víquez Marchena
@@ -38,10 +38,19 @@ The MEP appointments registry contains personal data of identified individuals,
 including full names and national identification numbers (cédulas). This
 software processes that data locally, never transmits it to any third party.
 
-Exports currently include the personal data fields as published by the source.
-Opt-in export of personal fields and redaction of identifiers in log output are
-planned; see CHANGELOG.md. Until then, treat generated workbooks and log files
-as containing personal data.
+Exported workbooks leave out the two columns that identify a person, the cédula
+and the full name, unless whoever exports asks for them with the
+--datos-personales option. CVM_EXPORT_PERSONAL_DATA sets the default for every
+interface. A workbook written with those columns included is personal data and
+has to be handled as such.
+
+National identification numbers are removed from everything written to the log
+files and to the terminal, including text quoted from the source pages and text
+inside tracebacks. Names are not removed from log output, because no pattern can
+tell one from an institution or a regional office name; nothing written today
+puts one there.
+
+Results shown on screen name the person appointed but never their cédula.
 
 Users who redistribute data obtained with this tool are solely responsible for
 compliance with Costa Rica's Ley 8968 (Ley de Protección de la Persona frente
@@ -71,7 +80,6 @@ https://github.com/microsoft/playwright-python
   https://chromium.googlesource.com/chromium/src/+/main/LICENSE
 
 --------------------------------------------------------------------------------
-
 openpyxl
 Copyright (c) 2010 openpyxl
 License: MIT
@@ -82,7 +90,6 @@ et_xmlfile
 License: MIT
 
 --------------------------------------------------------------------------------
-
 greenlet
 License: MIT
 https://github.com/python-greenlet/greenlet
@@ -91,6 +98,24 @@ https://github.com/python-greenlet/greenlet
 pyee
 License: MIT
 https://github.com/jfhbrook/pyee
+
+--------------------------------------------------------------------------------
+Typer
+Copyright (c) 2019 Sebastián Ramírez
+License: MIT
+https://github.com/fastapi/typer
+
+--------------------------------------------------------------------------------
+Rich
+Copyright (c) 2020 Will McGugan
+License: MIT
+https://github.com/Textualize/rich
+
+--------------------------------------------------------------------------------
+tenacity
+Copyright (c) 2016 Julien Danjou
+License: Apache License 2.0
+https://github.com/jd/tenacity
 
 --------------------------------------------------------------------------------
 PyInstaller (build-time only; the bootloader is linked into the executable)
@@ -126,7 +151,3 @@ License: LGPL v3
   Users of a distributed binary have the right to replace the bundled Qt
   libraries with their own compatible versions. The full LGPL v3 text and the
   Qt source availability notice will accompany any binary that bundles Qt.
-
---------------------------------------------------------------------------------
-Typer, Rich, pydantic-settings, tenacity, httpx
-Licenses: MIT / Apache-2.0 (see each project for details)
