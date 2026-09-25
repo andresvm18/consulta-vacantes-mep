@@ -80,6 +80,24 @@ def _invoke(runner: CliRunner, *args: str) -> Result:
     return runner.invoke(app, list(args))
 
 
+@pytest.fixture
+def exports(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
+    """Record what the command asked the export layer for, writing nothing."""
+    calls: list[dict[str, object]] = []
+
+    def _record(
+        _vacancies: object,
+        _appointments: object = None,
+        filename_prefix: str = "vacantes",
+        *,
+        include_personal: bool = False,
+    ) -> None:
+        calls.append({"prefix": filename_prefix, "include_personal": include_personal})
+
+    monkeypatch.setattr(main_module, "export_data_to_excel", _record)
+    return calls
+
+
 # ── Help ──────────────────────────────────────────────────────────────────────
 def test_help_opens_no_browser(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch
@@ -215,3 +233,63 @@ def test_every_failing_status_has_something_to_say(
     monkeypatch.setattr(main_module, "install_chromium", lambda: ChromiumCheck(status))
 
     assert prepare_browser() is False
+
+
+# ── Personal data in the export ───────────────────────────────────────────────
+def test_buscar_leaves_personal_data_out_by_default(
+    runner: CliRunner, exports: list[dict[str, object]]
+) -> None:
+    """Nobody has to remember the flag to get the safe workbook."""
+    _invoke(runner, "buscar")
+
+    assert exports[0]["include_personal"] is False
+
+
+def test_buscar_includes_personal_data_when_asked(
+    runner: CliRunner, exports: list[dict[str, object]]
+) -> None:
+    _invoke(runner, "buscar", "--datos-personales")
+
+    assert exports[0]["include_personal"] is True
+
+
+def test_buscar_can_be_told_to_leave_it_out(
+    runner: CliRunner, exports: list[dict[str, object]]
+) -> None:
+    """The negative form exists so the choice can be explicit in a script even
+    if the default ever moves."""
+    _invoke(runner, "buscar", "--sin-datos-personales")
+
+    assert exports[0]["include_personal"] is False
+
+
+def test_the_flag_is_offered_in_spanish(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wide terminal on purpose: Typer elides the options table at 80 columns,
+    so a narrow run would pass this whatever the option was called."""
+    monkeypatch.setenv("COLUMNS", "200")
+
+    result = _invoke(runner, "buscar", "--help")
+
+    assert "--datos-personales" in result.output
+    assert "--sin-datos-personales" in result.output
+
+
+def test_the_help_says_which_way_the_flag_defaults(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Someone about to export has to be able to see it is off without
+    reading the source."""
+    monkeypatch.setenv("COLUMNS", "200")
+
+    result = _invoke(runner, "buscar", "--help")
+
+    assert "[default: sin-datos-personales]" in result.output
+
+
+def test_vacantes_has_no_personal_data_flag(runner: CliRunner) -> None:
+    """A vacancy names a post, not a person, so the option would be a lie."""
+    result = _invoke(runner, "vacantes", "--datos-personales")
+
+    assert result.exit_code != 0

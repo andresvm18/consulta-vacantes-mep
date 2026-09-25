@@ -20,8 +20,8 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 from consulta_vacantes_mep.labels import (
-    APPOINTMENT_LABELS,
     VACANCY_LABELS,
+    appointment_labels,
     appointment_to_row,
     vacancy_to_row,
 )
@@ -88,11 +88,17 @@ def export_data_to_excel(
     vacancies: list[Vacancy],
     appointments: list[Appointment] | None = None,
     filename_prefix: str = "vacantes",
+    *,
+    include_personal: bool = EXPORT.include_personal_data,
 ) -> Path | None:
     """Write both sheets to a timestamped workbook, or nothing at all.
 
     Returns the path written, or None when there was nothing to write: an empty
     workbook is worse than no workbook, because it looks like an answer.
+
+    The identifying columns are left out unless asked for. The default comes
+    from the settings rather than from this signature, so one environment
+    variable governs every interface.
     """
     if not vacancies:
         logger.warning("No vacancies to export; skipping workbook creation.")
@@ -119,8 +125,11 @@ def export_data_to_excel(
     )
     _write_sheet(
         appointments_sheet,
-        APPOINTMENT_LABELS,
-        [appointment_to_row(a) for a in appointments or []],
+        appointment_labels(include_personal=include_personal),
+        [
+            appointment_to_row(a, include_personal=include_personal)
+            for a in appointments or []
+        ],
     )
 
     for worksheet in workbook.worksheets:

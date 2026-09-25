@@ -17,7 +17,7 @@ from consulta_vacantes_mep.cli.reporter import RichReporter
 from consulta_vacantes_mep.exports.excel import export_data_to_excel
 from consulta_vacantes_mep.labels import appointment_to_row
 from consulta_vacantes_mep.models import Appointment, Vacancy
-from consulta_vacantes_mep.settings import default_year
+from consulta_vacantes_mep.settings import EXPORT, default_year
 from consulta_vacantes_mep.utils.logger import configure_logging
 from consulta_vacantes_mep.utils.playwright_setup import (
     ChromiumStatus,
@@ -78,7 +78,9 @@ def show_result(result: SearchResult) -> None:
         for appointment in result.appointments:
             console.print()
 
-            for label, value in appointment_to_row(appointment).items():
+            row = appointment_to_row(appointment, include_personal=True)
+
+            for label, value in row.items():
                 console.print(f"  {label}: {value}")
 
     if not result.failed:
@@ -111,14 +113,23 @@ def show_vacancies(vacancies: list[Vacancy]) -> None:
 
 
 def export_result(
-    vacancies: list[Vacancy], appointments: list[Appointment] | None, specialty: str | None
+    vacancies: list[Vacancy],
+    appointments: list[Appointment] | None,
+    specialty: str | None,
+    *,
+    include_personal: bool = EXPORT.include_personal_data,
 ) -> None:
     """Write the workbook and say where it landed."""
     prefix = f"vacantes_{specialty.replace(' ', '_')}" if specialty else "todas_las_vacantes"
-    file_path = export_data_to_excel(vacancies, appointments, prefix)
+    file_path = export_data_to_excel(
+        vacancies, appointments, prefix, include_personal=include_personal
+    )
 
     if file_path:
         console.print(f"\n  Archivo Excel generado:\n  {file_path}")
+
+        if not include_personal:
+            console.print("  Sin cédula ni nombre. Use --datos-personales para incluirlos.")
 
 
 def ask_export(result: SearchResult, specialty: str | None = None) -> None:
@@ -221,6 +232,13 @@ def search_command(
     exportar: Annotated[
         bool, typer.Option("--exportar/--sin-exportar", help="Escribe el archivo Excel.")
     ] = True,
+    datos_personales: Annotated[
+        bool,
+        typer.Option(
+            "--datos-personales/--sin-datos-personales",
+            help="Incluye la cédula y el nombre en el archivo Excel.",
+        ),
+    ] = EXPORT.include_personal_data,
 ) -> None:
     """Consulta las vacantes publicadas y los nombramientos hechos contra ellas."""
     session, reporter = new_session()
@@ -237,7 +255,12 @@ def search_command(
     show_result(result)
 
     if exportar:
-        export_result(result.vacancies, result.appointments, especialidad)
+        export_result(
+            result.vacancies,
+            result.appointments,
+            especialidad,
+            include_personal=datos_personales,
+        )
 
 
 @app.command("vacantes")

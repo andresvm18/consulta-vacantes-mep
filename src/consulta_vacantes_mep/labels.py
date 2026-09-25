@@ -35,6 +35,28 @@ APPOINTMENT_LABELS: dict[str, str] = {
 }
 
 
+# The appointment fields that identify a specific person. Named here rather
+# than at each call site so that adding a field to the model is a decision
+# about this set, not something that leaks by default.
+PERSONAL_FIELDS = frozenset({"national_id", "full_name"})
+
+
+def appointment_labels(*, include_personal: bool) -> dict[str, str]:
+    """The appointment labels, with or without the ones naming a person.
+
+    Order is preserved either way, so a caller can write a heading row and the
+    rows under it from the same call and have them line up.
+    """
+    if include_personal:
+        return dict(APPOINTMENT_LABELS)
+
+    return {
+        field: label
+        for field, label in APPOINTMENT_LABELS.items()
+        if field not in PERSONAL_FIELDS
+    }
+
+
 def vacancy_to_row(vacancy: Vacancy) -> dict[str, str]:
     """Convert a vacancy into a Spanish-keyed row for export."""
     return {
@@ -42,9 +64,16 @@ def vacancy_to_row(vacancy: Vacancy) -> dict[str, str]:
     }
 
 
-def appointment_to_row(appointment: Appointment) -> dict[str, str]:
-    """Convert an appointment into a Spanish-keyed row for export."""
+def appointment_to_row(
+    appointment: Appointment, *, include_personal: bool = False
+) -> dict[str, str]:
+    """Convert an appointment into a Spanish-keyed row for export.
+
+    Leaves out the identifying columns unless asked for them. The default is
+    the safe one on purpose: a caller that forgets to decide gets a row it can
+    hand to anyone.
+    """
     return {
         label: getattr(appointment, field)
-        for field, label in APPOINTMENT_LABELS.items()
+        for field, label in appointment_labels(include_personal=include_personal).items()
     }

@@ -19,7 +19,12 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from consulta_vacantes_mep.exports import excel as excel_module
 from consulta_vacantes_mep.exports.excel import export_data_to_excel
-from consulta_vacantes_mep.labels import APPOINTMENT_LABELS, VACANCY_LABELS
+from consulta_vacantes_mep.labels import (
+    APPOINTMENT_LABELS,
+    PERSONAL_FIELDS,
+    VACANCY_LABELS,
+    appointment_labels,
+)
 from consulta_vacantes_mep.models import Appointment, Vacancy
 from consulta_vacantes_mep.settings import EXPORT
 
@@ -172,10 +177,13 @@ def test_a_vacancy_row_holds_its_fields_in_label_order() -> None:
 
 
 def test_the_appointment_headers_are_the_spanish_labels() -> None:
+    """Minus the identifying ones, which are not written unless asked for."""
     path = export_data_to_excel(PUBLISHED, [_appointment("1531185")])
 
     assert path is not None
-    assert _row(_sheet(path, "Nombramientos"), 1) == list(APPOINTMENT_LABELS.values())
+    assert _row(_sheet(path, "Nombramientos"), 1) == list(
+        appointment_labels(include_personal=False).values()
+    )
 
 
 def test_every_appointment_gets_a_row() -> None:
@@ -197,7 +205,9 @@ def test_an_appointments_sheet_with_nothing_in_it_still_names_its_columns() -> N
     path = export_data_to_excel(PUBLISHED)
 
     assert path is not None
-    assert _row(_sheet(path, "Nombramientos"), 1) == list(APPOINTMENT_LABELS.values())
+    assert _row(_sheet(path, "Nombramientos"), 1) == list(
+        appointment_labels(include_personal=False).values()
+    )
 
 
 def test_an_empty_appointments_sheet_holds_only_its_headers() -> None:
@@ -206,6 +216,106 @@ def test_an_empty_appointments_sheet_holds_only_its_headers() -> None:
 
     assert path is not None
     assert _sheet(path, "Nombramientos").max_row == 1
+
+
+# ── Personal data ─────────────────────────────────────────────────────────────
+PERSONAL_HEADINGS = [APPOINTMENT_LABELS[field] for field in PERSONAL_FIELDS]
+
+
+def test_the_identifying_columns_are_absent_by_default() -> None:
+    """A workbook is a file that gets forwarded, so it does not carry these
+    unless the person exporting it said so."""
+    path = export_data_to_excel(PUBLISHED, [_appointment("1531185")])
+
+    assert path is not None
+    headings = _row(_sheet(path, "Nombramientos"), 1)
+
+    assert not set(headings) & set(PERSONAL_HEADINGS)
+
+
+def test_the_identifying_values_are_absent_by_default() -> None:
+    """Dropping the headings is not enough if the values are still in the row."""
+    path = export_data_to_excel(PUBLISHED, [_appointment("1531185")])
+
+    assert path is not None
+    written = {
+        cell.value
+        for row in _sheet(path, "Nombramientos").iter_rows()
+        for cell in row
+    }
+
+    assert "0-0000-0000" not in written
+    assert "Persona De Prueba" not in written
+
+
+def test_the_identifying_columns_are_written_when_asked_for() -> None:
+    path = export_data_to_excel(
+        PUBLISHED, [_appointment("1531185")], include_personal=True
+    )
+
+    assert path is not None
+    assert _row(_sheet(path, "Nombramientos"), 1) == list(APPOINTMENT_LABELS.values())
+
+
+def test_the_identifying_values_are_written_when_asked_for() -> None:
+    path = export_data_to_excel(
+        PUBLISHED, [_appointment("1531185")], include_personal=True
+    )
+
+    assert path is not None
+    row = _row(_sheet(path, "Nombramientos"), 2)
+
+    assert row[1] == "0-0000-0000"
+    assert row[2] == "Persona De Prueba"
+
+
+def test_the_remaining_columns_survive_the_redaction() -> None:
+    """Everything the registry answers except who: a workbook that lost the
+    vacancy number or the dates would be useless rather than private."""
+    path = export_data_to_excel(PUBLISHED, [_appointment("1531185")])
+
+    assert path is not None
+    headings = _row(_sheet(path, "Nombramientos"), 1)
+
+    assert len(headings) == len(APPOINTMENT_LABELS) - len(PERSONAL_FIELDS)
+    assert headings[0] == "Vacante"
+
+
+def test_a_redacted_row_still_lines_up_with_its_headers() -> None:
+    """Dropping two columns from the middle is where an export silently shifts
+    every value one cell to the left."""
+    path = export_data_to_excel(PUBLISHED, [_appointment("1531185")])
+
+    assert path is not None
+    sheet = _sheet(path, "Nombramientos")
+    headings = _row(sheet, 1)
+    values = _row(sheet, 2)
+
+    assert dict(zip(headings, values, strict=True)) == {
+        "Vacante": "1531185",
+        "Institución": "Liceo de Prueba",
+        "Clase Puesto": "Profesor de Enseñanza Media",
+        "Especialidad": "Francés",
+        "Grupo": "MT 4",
+        "N° Puesto": "0",
+        "Rige": "05/08/2026",
+        "Vence": "31/12/2026",
+        "Estado": "Activo",
+        "Calificación R. Elegibles": "0",
+        "Título Nómina": "Nómina de prueba",
+    }
+
+
+def test_the_vacancies_sheet_is_untouched_by_the_setting() -> None:
+    """Vacancies name a post, not a person, so nothing there is redacted."""
+    with_personal = export_data_to_excel(PUBLISHED, None, include_personal=True)
+    without = export_data_to_excel(PUBLISHED, None, include_personal=False)
+
+    assert with_personal is not None
+    assert without is not None
+    assert _row(_sheet(with_personal, "Vacantes"), 1) == _row(
+        _sheet(without, "Vacantes"), 1
+    )
 
 
 # ── The formatting ────────────────────────────────────────────────────────────

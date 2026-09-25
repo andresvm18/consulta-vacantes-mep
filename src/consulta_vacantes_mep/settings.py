@@ -26,6 +26,33 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+_TRUE = frozenset({"1", "true", "yes", "on"})
+_FALSE = frozenset({"0", "false", "no", "off"})
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    """Read a boolean from the environment, falling back on any bad value.
+
+    An unrecognised value falls back rather than being read as true, which
+    matters for the setting that governs personal data: a typo should not be
+    what turns it on.
+    """
+    raw = os.environ.get(name)
+
+    if raw is None:
+        return default
+
+    normalized = raw.strip().lower()
+
+    if normalized in _TRUE:
+        return True
+
+    if normalized in _FALSE:
+        return False
+
+    return default
+
+
 def default_year() -> int:
     """Return the year to query when the user does not specify one."""
     return datetime.now().astimezone().year
@@ -71,12 +98,21 @@ class ScrapingSettings:
 
 @dataclass(frozen=True)
 class ExportSettings:
-    """Excel output formatting."""
+    """Excel output formatting, and what the workbook is allowed to carry."""
 
     header_fill_color: str = "1F4E78"
     header_font_color: str = "FFFFFF"
     max_column_width: int = 45
     timestamp_format: str = "%Y-%m-%d_%H-%M"
+
+    # Whether the appointments sheet carries the columns that identify a
+    # person. Off by default: a workbook is a file that gets forwarded, and
+    # the registry is consulted to find out whether a post was filled, which
+    # the remaining columns already answer. Every interface reads this rather
+    # than deciding for itself, so the policy has one home.
+    include_personal_data: bool = field(
+        default_factory=lambda: _env_bool("CVM_EXPORT_PERSONAL_DATA", default=False)
+    )
 
 
 @dataclass(frozen=True)
