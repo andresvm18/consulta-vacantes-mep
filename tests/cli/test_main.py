@@ -23,6 +23,7 @@ from consulta_vacantes_mep.models import (
     Vacancy,
 )
 from consulta_vacantes_mep.utils.playwright_setup import ChromiumCheck, ChromiumStatus
+from tests.rendering import visible
 
 # See tests/cli/conftest.py for why this is not a plain import.
 main_module = importlib.import_module("consulta_vacantes_mep.cli.main")
@@ -87,6 +88,11 @@ def _invoke(runner: CliRunner, *args: str) -> Result:
     return runner.invoke(app, list(args))
 
 
+def _text(result: Result) -> str:
+    """What the command actually said. See tests/rendering.py."""
+    return visible(result.output)
+
+
 @pytest.fixture
 def exports(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
     """Record what the command asked the export layer for, writing nothing."""
@@ -130,17 +136,21 @@ def test_help_is_in_spanish(runner: CliRunner) -> None:
     """Typer renders the command docstrings, which the user reads."""
     result = _invoke(runner, "--help")
 
-    assert "vacantes" in result.output
-    assert "buscar" in result.output
+    written = _text(result)
+
+    assert "vacantes" in written
+    assert "buscar" in written
 
 
 # ── vacantes ──────────────────────────────────────────────────────────────────
 def test_vacantes_lists_every_vacancy(runner: CliRunner) -> None:
     result = _invoke(runner, "vacantes")
 
+    written = _text(result)
+
     assert result.exit_code == 0
-    assert "1531185" in result.output
-    assert "1538058" in result.output
+    assert "1531185" in written
+    assert "1538058" in written
 
 
 def test_vacantes_passes_the_specialty_through(runner: CliRunner) -> None:
@@ -279,8 +289,10 @@ def test_the_flag_is_offered_in_spanish(
 
     result = _invoke(runner, "buscar", "--help")
 
-    assert "--datos-personales" in result.output
-    assert "--sin-datos-personales" in result.output
+    written = _text(result)
+
+    assert "--datos-personales" in written
+    assert "--sin-datos-personales" in written
 
 
 def test_the_help_says_which_way_the_flag_defaults(
@@ -292,7 +304,7 @@ def test_the_help_says_which_way_the_flag_defaults(
 
     result = _invoke(runner, "buscar", "--help")
 
-    assert "[default: sin-datos-personales]" in result.output
+    assert "[default: sin-datos-personales]" in _text(result)
 
 
 def test_vacantes_has_no_personal_data_flag(runner: CliRunner) -> None:
@@ -346,14 +358,16 @@ def test_the_identification_number_stays_off_the_terminal(screen: StringIO) -> N
     """Scrollback outlives the run, and nobody consults this to find one."""
     show_result(_found("1531185"))
 
-    assert CEDULA not in screen.getvalue()
+    written = visible(screen.getvalue())
+    assert CEDULA not in written
 
 
 def test_the_name_is_shown(screen: StringIO) -> None:
     """Whether a post was filled, and by whom, is the question being asked."""
     show_result(_found("1531185"))
 
-    assert "Persona De Prueba" in screen.getvalue()
+    written = visible(screen.getvalue())
+    assert "Persona De Prueba" in written
 
 
 def test_each_appointment_takes_one_line(screen: StringIO) -> None:
@@ -361,7 +375,8 @@ def test_each_appointment_takes_one_line(screen: StringIO) -> None:
     hundred lines of terminal."""
     show_result(_found("1531185", "1536996", "1538058"))
 
-    rows = [line for line in screen.getvalue().splitlines() if "Persona De Prueba" in line]
+    lines = visible(screen.getvalue()).splitlines()
+    rows = [line for line in lines if "Persona De Prueba" in line]
 
     assert len(rows) == 3
 
@@ -369,7 +384,7 @@ def test_each_appointment_takes_one_line(screen: StringIO) -> None:
 def test_the_columns_are_the_ones_worth_scanning(screen: StringIO) -> None:
     show_result(_found("1531185"))
 
-    written = screen.getvalue()
+    written = visible(screen.getvalue())
 
     for heading in ("Vacante", "Nombre", "Institución", "Especialidad", "Rige", "Vence"):
         assert heading in written
@@ -379,7 +394,7 @@ def test_the_rest_of_the_record_is_left_to_the_workbook(screen: StringIO) -> Non
     """Six columns of thirteen. The others are not worth a terminal column."""
     show_result(_found("1531185"))
 
-    written = screen.getvalue()
+    written = visible(screen.getvalue())
 
     assert "No Consta" not in written
     assert "Nómina de prueba" not in written
@@ -388,7 +403,7 @@ def test_the_rest_of_the_record_is_left_to_the_workbook(screen: StringIO) -> Non
 def test_nothing_found_says_so(screen: StringIO) -> None:
     show_result(SearchResult(vacancies=PUBLISHED, queries=[]))
 
-    assert "No se encontraron nombramientos" in screen.getvalue()
+    assert "No se encontraron nombramientos" in visible(screen.getvalue())
 
 
 def test_a_failed_lookup_is_still_reported(screen: StringIO) -> None:
@@ -400,7 +415,7 @@ def test_a_failed_lookup_is_still_reported(screen: StringIO) -> None:
 
     show_result(result)
 
-    written = screen.getvalue()
+    written = visible(screen.getvalue())
 
     assert "1536996" in written
     assert "no se pudieron consultar" in written

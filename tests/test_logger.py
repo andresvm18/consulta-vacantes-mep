@@ -20,6 +20,7 @@ from rich.console import Console
 from consulta_vacantes_mep.utils import logger as logger_module
 from consulta_vacantes_mep.utils.logger import configure_logging, get_logger
 from consulta_vacantes_mep.utils.redaction import REDACTED
+from tests.rendering import visible
 
 CEDULA = "102340567"
 VACANCY = "1536996"
@@ -117,8 +118,9 @@ def test_an_identifier_does_not_reach_the_console() -> None:
 
     get_logger("consulta_vacantes_mep.test").warning("appointed %s", CEDULA)
 
-    assert CEDULA not in buffer.getvalue()
-    assert REDACTED in buffer.getvalue()
+    written = visible(buffer.getvalue())
+    assert CEDULA not in written
+    assert REDACTED in written
 
 
 # ── The log stays worth reading ───────────────────────────────────────────────
