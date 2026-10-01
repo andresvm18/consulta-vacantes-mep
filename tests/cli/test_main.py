@@ -14,6 +14,7 @@ import pytest
 from rich.console import Console
 from typer.testing import CliRunner, Result
 
+from consulta_vacantes_mep.app import startup
 from consulta_vacantes_mep.app.session import SearchResult
 from consulta_vacantes_mep.cli.main import app, prepare_browser, show_result
 from consulta_vacantes_mep.models import (
@@ -125,7 +126,7 @@ def test_help_opens_no_browser(
         message = "the browser check ran for --help"
         raise AssertionError(message)
 
-    monkeypatch.setattr(main_module, "chromium_is_available", explode)
+    monkeypatch.setattr(startup, "chromium_is_available", explode)
 
     result = _invoke(runner, "--help")
 
@@ -204,37 +205,76 @@ def test_an_unknown_option_is_rejected(runner: CliRunner) -> None:
 
 
 # ── prepare_browser ───────────────────────────────────────────────────────────
-def test_an_available_browser_needs_no_install(
+# The sequence itself is covered in tests/test_startup.py. What is left here is
+# what the user is told, which is all this function still decides.
+def _outcome(
+    monkeypatch: pytest.MonkeyPatch, check: ChromiumCheck, *, announces: bool = False
+) -> None:
+    """Replace the startup sequence with one that reports `check`."""
+
+    def _ensure(*, before_install: object = None) -> ChromiumCheck:
+        if announces and callable(before_install):
+            before_install()
+
+        return check
+
+    monkeypatch.setattr(main_module, "ensure_chromium", _ensure)
+
+
+def test_a_ready_browser_lets_the_run_go_ahead(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def not_called() -> ChromiumCheck:
-        message = "install ran with a browser already present"
-        raise AssertionError(message)
-
-    monkeypatch.setattr(main_module, "chromium_is_available", lambda: True)
-    monkeypatch.setattr(main_module, "install_chromium", not_called)
+    _outcome(monkeypatch, ChromiumCheck(ChromiumStatus.INSTALLED))
 
     assert prepare_browser() is True
 
 
-def test_a_missing_browser_is_installed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(main_module, "chromium_is_available", lambda: False)
-    monkeypatch.setattr(
-        main_module, "install_chromium", lambda: ChromiumCheck(ChromiumStatus.INSTALLED)
-    )
+def test_a_ready_browser_is_not_worth_mentioning(
+    monkeypatch: pytest.MonkeyPatch, screen: StringIO
+) -> None:
+    """The common case says nothing at all."""
+    _outcome(monkeypatch, ChromiumCheck(ChromiumStatus.INSTALLED))
 
-    assert prepare_browser() is True
+    prepare_browser()
+
+    assert visible(screen.getvalue()) == ""
 
 
-def test_an_install_that_fails_gives_up(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(main_module, "chromium_is_available", lambda: False)
-    monkeypatch.setattr(
-        main_module,
-        "install_chromium",
-        lambda: ChromiumCheck(ChromiumStatus.FAILED, "connection refused"),
-    )
+def test_a_browser_that_could_not_be_readied_stops_the_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _outcome(monkeypatch, ChromiumCheck(ChromiumStatus.FAILED, "connection refused"))
 
     assert prepare_browser() is False
+
+
+def test_a_failure_is_explained_in_spanish(
+    monkeypatch: pytest.MonkeyPatch, screen: StringIO
+) -> None:
+    """The detail in the check is English and goes to the log. This is the half
+    the user reads."""
+    _outcome(monkeypatch, ChromiumCheck(ChromiumStatus.FAILED, "connection refused"))
+
+    prepare_browser()
+
+    written = visible(screen.getvalue())
+
+    assert "No se pudo instalar Chromium" in written
+    assert "connection refused" not in written
+
+
+def test_a_download_is_announced_before_it_starts(
+    monkeypatch: pytest.MonkeyPatch, screen: StringIO
+) -> None:
+    """Wired through to the sequence, which calls it before downloading. A
+    minute of silence is what this avoids."""
+    _outcome(
+        monkeypatch, ChromiumCheck(ChromiumStatus.INSTALLED), announces=True
+    )
+
+    prepare_browser()
+
+    assert "Instalando Chromium" in visible(screen.getvalue())
 
 
 @pytest.mark.parametrize(
@@ -246,8 +286,7 @@ def test_every_failing_status_has_something_to_say(
     """CHROMIUM_MESSAGES is indexed by status, so a value added to the enum
     without a message is a KeyError during startup, in the one code path that
     runs before anything else."""
-    monkeypatch.setattr(main_module, "chromium_is_available", lambda: False)
-    monkeypatch.setattr(main_module, "install_chromium", lambda: ChromiumCheck(status))
+    _outcome(monkeypatch, ChromiumCheck(status))
 
     assert prepare_browser() is False
 

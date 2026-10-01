@@ -12,17 +12,14 @@ from rich.console import Console
 from rich.table import Table
 
 from consulta_vacantes_mep.app.session import SearchResult, Session
+from consulta_vacantes_mep.app.startup import ensure_chromium
 from consulta_vacantes_mep.cli.menu import ask_year, show_welcome_menu
 from consulta_vacantes_mep.cli.reporter import RichReporter
 from consulta_vacantes_mep.exports.excel import export_data_to_excel
 from consulta_vacantes_mep.models import Appointment, Vacancy
 from consulta_vacantes_mep.settings import EXPORT, default_year
 from consulta_vacantes_mep.utils.logger import configure_logging
-from consulta_vacantes_mep.utils.playwright_setup import (
-    ChromiumStatus,
-    chromium_is_available,
-    install_chromium,
-)
+from consulta_vacantes_mep.utils.playwright_setup import ChromiumStatus
 
 console = Console()
 app = typer.Typer(
@@ -46,19 +43,20 @@ CHROMIUM_MESSAGES = {
 }
 
 
-def prepare_browser() -> bool:
-    """Make sure Chromium is usable, reporting to the user if it is not.
-
-    Checking and installing are separate calls so that the message about a
-    download that takes a minute is printed before it starts, not after.
-    """
-    if chromium_is_available():
-        return True
-
+def _announce_download() -> None:
+    """Said before the download starts, since it takes about a minute."""
     console.print("\n  Chromium de Playwright no está instalado.")
     console.print("  Instalando Chromium automáticamente...")
 
-    result = install_chromium()
+
+def prepare_browser() -> bool:
+    """Say what the startup sequence found, and whether a run can go ahead.
+
+    The sequence itself is app/startup.py. What is left here is wording and
+    where it goes, which is the only part a windowed interface would do
+    differently.
+    """
+    result = ensure_chromium(before_install=_announce_download)
 
     if result.ok:
         return True
