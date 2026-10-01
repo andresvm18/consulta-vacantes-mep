@@ -30,6 +30,11 @@ dependencies = [
     "tenacity>=9.0,<10.0",
     "typer>=0.15,<1.0",
     "rich>=13.9,<16.0",
+    # Essentials, not the PySide6 metapackage. That one adds WebEngine, 3D,
+    # Charts and Multimedia, none of which a window of widgets touches, and
+    # measures 639 MB installed against 226 MB for this one. QtCore, QtGui and
+    # QtWidgets are all here.
+    "PySide6-Essentials>=6.8,<7.0",
 ]
 
 [project.optional-dependencies]
