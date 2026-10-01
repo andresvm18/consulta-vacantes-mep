@@ -14,18 +14,10 @@ goes through the startup sequence, which is the point of the sequence living
 there.
 """
 
-import importlib
-
 import pytest
 from typer.testing import CliRunner
 
 from consulta_vacantes_mep.app import startup
-
-# The cli package reexports the main function, which shadows the main submodule,
-# so 'from consulta_vacantes_mep.cli import main' hands back the function. The
-# string form of monkeypatch.setattr has the same problem, since pytest resolves
-# it with getattr.
-main_module = importlib.import_module("consulta_vacantes_mep.cli.main")
 
 
 @pytest.fixture(autouse=True)

@@ -1,4 +1,10 @@
-"""The interactive console interface.
+"""The terminal interface, and the entry point that runs it.
+
+Named entry rather than main because the cli package reexports the main
+function, and a submodule of the same name was shadowed by it: importing
+consulta_vacantes_mep.cli.main handed back the function, not the module, so
+patching anything in it needed importlib. A second interface would have had the
+same problem under the same name, so the two are entry.py apiece.
 
 One Console for the whole process. Rich draws the progress bar by repainting
 the lines it owns, so a plain print landing in the middle of a run leaves the

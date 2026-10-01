@@ -6,7 +6,6 @@ scraping underneath them. The result they read is a real SearchResult, since
 imitating its shape would only prove the imitation was right.
 """
 
-import importlib
 from io import StringIO
 from typing import ClassVar
 
@@ -16,7 +15,8 @@ from typer.testing import CliRunner, Result
 
 from consulta_vacantes_mep.app import startup
 from consulta_vacantes_mep.app.session import SearchResult
-from consulta_vacantes_mep.cli.main import app, prepare_browser, show_result
+from consulta_vacantes_mep.cli import entry as entry_module
+from consulta_vacantes_mep.cli.entry import app, prepare_browser, show_result
 from consulta_vacantes_mep.models import (
     Appointment,
     AppointmentQuery,
@@ -25,9 +25,6 @@ from consulta_vacantes_mep.models import (
 )
 from consulta_vacantes_mep.utils.playwright_setup import ChromiumCheck, ChromiumStatus
 from tests.rendering import visible
-
-# See tests/cli/conftest.py for why this is not a plain import.
-main_module = importlib.import_module("consulta_vacantes_mep.cli.main")
 
 
 def _vacancy(number: str, specialty: str) -> Vacancy:
@@ -81,7 +78,7 @@ class FakeSession:
 @pytest.fixture(autouse=True)
 def fake_session(monkeypatch: pytest.MonkeyPatch) -> type[FakeSession]:
     FakeSession.instances = []
-    monkeypatch.setattr(main_module, "Session", FakeSession)
+    monkeypatch.setattr(entry_module, "Session", FakeSession)
     return FakeSession
 
 
@@ -108,7 +105,7 @@ def exports(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
     ) -> None:
         calls.append({"prefix": filename_prefix, "include_personal": include_personal})
 
-    monkeypatch.setattr(main_module, "export_data_to_excel", _record)
+    monkeypatch.setattr(entry_module, "export_data_to_excel", _record)
     return calls
 
 
@@ -218,7 +215,7 @@ def _outcome(
 
         return check
 
-    monkeypatch.setattr(main_module, "ensure_chromium", _ensure)
+    monkeypatch.setattr(entry_module, "ensure_chromium", _ensure)
 
 
 def test_a_ready_browser_lets_the_run_go_ahead(
@@ -389,7 +386,7 @@ def _found(*numbers: str) -> SearchResult:
 def screen(monkeypatch: pytest.MonkeyPatch) -> StringIO:
     """A console wide enough that Rich does not abbreviate the table."""
     buffer = StringIO()
-    monkeypatch.setattr(main_module, "console", Console(file=buffer, width=200))
+    monkeypatch.setattr(entry_module, "console", Console(file=buffer, width=200))
     return buffer
 
 
