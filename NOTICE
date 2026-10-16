@@ -118,6 +118,31 @@ License: Apache License 2.0
 https://github.com/jd/tenacity
 
 --------------------------------------------------------------------------------
+PySide6 (Qt for Python)
+Copyright (c) The Qt Company Ltd.
+License: LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0, at the recipient's option.
+This project relies on the LGPL v3 option.
+https://www.qt.io/qt-for-python
+
+  Qt is dynamically linked and is not statically compiled into this project.
+  Users of a distributed binary have the right to replace the bundled Qt
+  libraries with their own compatible versions. The full LGPL v3 text and the
+  Qt source availability notice accompany any binary that bundles Qt.
+
+  Installed as PySide6-Essentials, which is QtCore, QtGui and QtWidgets. The
+  PySide6 metapackage adds WebEngine, 3D, Charts and Multimedia, none of which
+  this project uses and all of which would be bundled.
+
+--------------------------------------------------------------------------------
+shiboken6
+Copyright (c) The Qt Company Ltd.
+License: LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0, at the recipient's option.
+This project relies on the LGPL v3 option.
+https://www.qt.io/qt-for-python
+
+  The binding layer PySide6 is built on, and installed with it.
+
+--------------------------------------------------------------------------------
 PyInstaller (build-time only; the bootloader is linked into the executable)
 License: GPL 2.0 with an exception permitting the distribution of
 non-GPL applications built with it
@@ -133,21 +158,3 @@ https://docs.python.org/3/license.html
 Microsoft Visual C++ Runtime (msvcp140.dll and related, Windows builds only)
 Copyright (c) Microsoft Corporation
 Redistributed under the Microsoft Visual Studio redistributable terms.
-
-
-================================================================================
-PLANNED DEPENDENCIES
-================================================================================
-
-The following will be added in upcoming releases and are listed here in
-advance so that licensing implications are tracked from the start.
-
---------------------------------------------------------------------------------
-PySide6 (Qt for Python) — planned for v1.2.0
-Copyright (c) The Qt Company Ltd.
-License: LGPL v3
-
-  Qt is dynamically linked and is not statically compiled into this project.
-  Users of a distributed binary have the right to replace the bundled Qt
-  libraries with their own compatible versions. The full LGPL v3 text and the
-  Qt source availability notice will accompany any binary that bundles Qt.

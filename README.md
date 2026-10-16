@@ -9,12 +9,12 @@ them, and exports the result to a formatted Excel workbook.
 The application interface is in Spanish. Source code, documentation, and commit
 messages are in English.
 
-> **Status: alpha.** The project is being modernized in stages. Stages 1 to 8
-> are complete: the package installs, the scrapers report progress instead of
-> printing, the interface is a Typer CLI over a shared application layer, the
-> workbook is written without pandas and leaves personal data out unless asked
-> for, and every push runs the linter, the type checker, and 187 tests.
-> See [CHANGELOG.md](CHANGELOG.md) for detail.
+> **Status: alpha.** The project is being modernized in stages. Stages 1 to 9
+> are complete: running the command opens a desktop window, the subcommands
+> remain for scripted runs, both drive the same application layer, the workbook
+> is written without pandas and leaves personal data out unless asked for, and
+> every push runs the linter, the type checker, and 323 tests.
+> What is left is packaging; see [CHANGELOG.md](CHANGELOG.md) for detail.
 
 ## What it does
 
@@ -27,6 +27,10 @@ messages are in English.
 
 - Python 3.12 or newer
 - Chromium (installed automatically through Playwright on first run)
+
+On Linux, Qt links a few libraries a minimal installation may not carry:
+`libegl1`, `libgl1` and `libxkbcommon0`. The test suite asks for Qt's offscreen
+platform, so running the tests needs them but needs no display.
 
 ## Development setup
 
@@ -55,13 +59,18 @@ The suite needs no network. Tests that would query the live MEP site carry the
 
 ## Usage
 
-Without a subcommand, the interactive menu opens:
+With no subcommand, the desktop window opens:
 
 ```bash
 consulta-vacantes-mep
 ```
 
-For scripted runs:
+The window searches every specialty or one of them, lists the vacancies and the
+appointments made against them in two tabs, rescrapes the vacancy list, and
+exports. A search takes about half a minute and reports what it is doing while
+it runs.
+
+The subcommands are the scriptable half, and answer on standard output:
 
 ```bash
 # Vacancies and the appointments recorded against them
@@ -81,9 +90,11 @@ The workbook leaves out the cédula and the name unless asked for:
 consulta-vacantes-mep buscar --datos-personales
 ```
 
-`CVM_EXPORT_PERSONAL_DATA=1` sets that default for every interface. The results
-shown on screen name the person appointed but never their cédula, and the log
-files carry no identification numbers at all.
+In the window, the same choice is a checkbox beside the export button.
+`CVM_EXPORT_PERSONAL_DATA=1` sets the default for both.
+
+Neither interface ever shows a cédula on screen, and the log files carry no
+identification numbers at all.
 
 Generated workbooks are written to `outputs/`. Runtime logs are written to
 `logs/`. Both directories are excluded from version control.
@@ -100,7 +111,7 @@ Generated workbooks are written to `outputs/`. Runtime logs are written to
 | 6 | Application layer with progress events, plus Typer CLI |
 | 7 | Test suite and continuous integration |
 | 8 | pandas-free export layer and personal-data redaction |
-| 9 | PySide6 desktop interface |
+| 9 | PySide6 desktop interface, replacing the interactive menu |
 | 10 | PyInstaller distribution with bundled Chromium |
 
 ## Privacy and legal

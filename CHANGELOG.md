@@ -28,18 +28,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports how many queries could not be completed.
 - Test suite covering table parsing, settings, the retry policy, and error
   classification.
-- Vacancy results are cached for the duration of a session, so consecutive menu
-  selections reuse them instead of scraping every regional office again.
+- Vacancy results are cached for the duration of a session, so a second search
+  reuses them instead of scraping every regional office again.
 - Tests for the bookkeeping that guarantees one result per vacancy number
   whatever the worker threads did.
 - Progress events emitted by the scrapers, so a run can be drawn by a terminal,
   a GUI, or nothing at all. The scrapers no longer decide how they look.
 - An application layer owning the search sequence and the vacancy cache. The
-  two menu options ran the same steps and differed only in whether a specialty
-  narrowed the vacancies down.
-- Subcommands `buscar` and `vacantes`. Running with no subcommand still opens
-  the interactive menu.
-- Menu option to refresh the cached vacancy list within a session.
+  two ways of searching ran the same steps and differed only in whether a
+  specialty narrowed the vacancies down. It now has two consumers, which is
+  what it was built for.
+- Subcommands `buscar` and `vacantes` for scripted runs.
 - Continuous integration: ruff, mypy, and the test suite run on every push and
   pull request, on the lowest supported Python version and on 3.13.
 - Test coverage for the layers stage 6 introduced and left unverified: the
@@ -87,9 +86,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its own messages, and the installer runs without opening a console window
   and with its output captured into the log. A windowed build has no standard
   output: a print would raise before the interface appeared.
-- The menu moved into the `cli` package and `utils/console.py` was removed.
-  Nothing under `src/` prints any more, so the linter exemptions for `print`
-  are gone rather than relocated.
+- `utils/console.py` was removed. Nothing under `src/` prints any more, so the
+  linter exemptions for `print` are gone rather than relocated.
 - Tables are read in a single browser evaluation instead of one round trip per
   cell. Measured against the captured fixture, 250 milliseconds per table down
   to 7.5, and the gap widens with the number of rows. Speed is the smaller
@@ -117,6 +115,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rule was silenced in stage 1 and the code it pointed at was fixed in stage 3,
   but the line stayed, so the check was off for three stages with nothing left
   to report.
+- Running the command with no subcommand opens the window rather than a menu.
+  The subcommands are unchanged and remain the scriptable half.
+- The CLI entry module is `cli/entry.py`. As `cli/main.py` it was shadowed by
+  the function the package reexports under that name, so importing the module
+  handed back the function and reaching it needed `importlib`. A smoke test
+  pins the two apart, since the broken form still imports something callable.
+- `prepare_browser` no longer holds both the sequence and the Spanish it says
+  about it. The sequence moved to the application layer, which is what lets the
+  window reuse it with a dialog instead of a printed line.
+- The rule for naming an exported workbook moved into the export layer. Both
+  interfaces want the same answer, and a user who exports from the window one
+  day and from a command the next should not find two naming schemes in one
+  folder.
+- `ItemCompleted.index` has a documented meaning. Both emitters agreed that it
+  counts what has finished, which is what a progress bar wants, but nothing said
+  so and the only consumer ignored it.
+- CI installs the three libraries Qt links that a bare runner lacks. They were
+  measured rather than remembered, and the test suite asks for Qt's offscreen
+  platform itself so a developer's machine and CI behave the same.
+
+### Removed
+
+- The interactive console menu, and `cli/menu.py` with it. Everything it
+  offered the window offers better, and it was the one part of the interface
+  nothing tested.
 
 ### Fixed
 
@@ -166,7 +189,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   row that carries one. Nothing does today.
 - `NOTICE` does not list the transitive dependencies a frozen build bundles
   through Typer and Rich: Click, Pygments, markdown-it-py, mdurl, shellingham,
-  annotated-doc, and typing_extensions through pyee.
+  annotated-doc, and typing_extensions through pyee. Worth closing before an
+  executable is put in front of anyone.
+- A run cannot be cancelled once it has started. The scrapers have no point at
+  which they ask whether they should stop, so a cancel would mean abandoning a
+  thread with a browser open in it.
+- The window writes to `outputs/` and names the path in its status bar. It does
+  not offer to choose a folder or to open the one it wrote to.
+- The first regional office of a run sometimes fails its first attempt, costing
+  about three seconds. Blazor prerenders the markup, so no condition on the DOM
+  distinguishes a live app from a rendered one. Recorded as always happening
+  until a run on the first of October did not reproduce it.
 - The PyInstaller spec does not bundle Playwright browser binaries.
 
 ## [0.3.0] - 2026-08-03
@@ -193,6 +226,21 @@ Baseline snapshot of the pre-modernization codebase, tagged as `v0.3.0-legacy`.
 - Test coverage for the three modules that decide what may leave the program:
   the labels, the redaction pattern, and the logging configuration that applies
   it. The suite went from 110 tests to 187.
+- A desktop window, built on PySide6 and the second consumer of the application
+  layer. It searches every specialty or one of them, lists vacancies and
+  appointments in two tabs, rescrapes the vacancy list, and exports, driving the
+  same `Session` the subcommands drive.
+- Progress during a run reaches the window as Qt signals. The scrapers already
+  emitted events for whoever was listening; a reporter forwards each one, and Qt
+  queues it onto the thread that owns the widgets.
+- Searches run on a thread of their own, so a run that takes half a minute no
+  longer stops the interface repainting.
+- A startup sequence shared by both interfaces: check for a browser, say a
+  download is about to start, install, report what happened. The wording is each
+  interface's own, as a printed line or as a dialog.
+- Test coverage for everything stage 9 added, and for the entry point's choice
+  between the two interfaces, which had none at all. The suite went from 187
+  tests to 323.
 
 ### Known issues
 
