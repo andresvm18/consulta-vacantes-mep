@@ -15,10 +15,18 @@ from PySide6.QtCore import QObject, Signal, SignalInstance
 from PySide6.QtWidgets import QApplication, QTableWidget, QTableWidgetItem
 
 from consulta_vacantes_mep.app.session import SearchResult
+from consulta_vacantes_mep.events import (
+    ItemCompleted,
+    Phase,
+    PhaseFinished,
+    PhaseStarted,
+)
 from consulta_vacantes_mep.exceptions import PermanentScrapingError
+from consulta_vacantes_mep.gui.reporter import QtReporter
 from consulta_vacantes_mep.gui.window import (
     APPOINTMENT_COLUMNS,
     FAILURE_MESSAGE,
+    PHASE_TITLES,
     VACANCY_COLUMNS,
     MainWindow,
 )
@@ -113,7 +121,21 @@ class FakeWorker(QObject):
 @pytest.fixture
 def window() -> MainWindow:
     """The QApplication an unparented widget needs is autouse; see conftest."""
-    return MainWindow(FakeWorker())  # type: ignore[arg-type]
+    return MainWindow(FakeWorker(), QtReporter())  # type: ignore[arg-type]
+
+
+@pytest.fixture
+def reporter(window: MainWindow) -> QtReporter:
+    """A reporter already connected to the window under test.
+
+    Built here rather than taken from the window, which does not keep it: the
+    window connects and has no further use for it, the same way the scrapers
+    report without knowing who is listening.
+    """
+    fresh = QtReporter()
+    fresh.progressed.connect(window._on_progress)
+
+    return fresh
 
 
 def _worker(window: MainWindow) -> FakeWorker:
@@ -143,6 +165,14 @@ def _row(table: QTableWidget, row: int) -> list[str]:
 def _emit(signal: SignalInstance, payload: object) -> None:
     """Deliver what the worker would have delivered, and let it land."""
     signal.emit(payload)
+    QApplication.processEvents()
+
+
+def _report(reporter: QtReporter, *events: object) -> None:
+    """Deliver what the scrapers would have reported, in order."""
+    for event in events:
+        reporter.emit(event)  # type: ignore[arg-type]
+
     QApplication.processEvents()
 
 
@@ -474,3 +504,176 @@ def test_a_failure_leaves_earlier_results_alone(window: MainWindow) -> None:
 
     assert window.vacancies_table.rowCount() == len(PUBLISHED)
     assert window.appointments_table.rowCount() == 1
+
+
+# ── Progress while a run goes ─────────────────────────────────────────────────
+def test_there_is_a_title_for_every_phase() -> None:
+    """PHASE_TITLES is indexed by phase, so a phase added to the enum without a
+    title is a KeyError in the middle of a run, in the one code path that only
+    runs when the window is already busy."""
+    assert set(PHASE_TITLES) == set(Phase)
+
+
+def test_no_bar_is_shown_before_anything_starts(window: MainWindow) -> None:
+    """A progress bar sitting at zero reads as something stuck."""
+    assert window.progress.isVisible() is False
+
+
+def test_the_bar_appears_when_a_run_starts(window: MainWindow) -> None:
+    window.search_button.click()
+
+    assert window.progress.isHidden() is False
+
+
+def test_the_bar_is_a_busy_indicator_until_a_total_is_known(
+    window: MainWindow,
+) -> None:
+    """The scraper cannot report a total until it has loaded the page and read
+    the dropdown, which is a second or two of a browser starting up. A range of
+    nothing is how Qt draws that."""
+    window.search_button.click()
+
+    assert window.progress.minimum() == 0
+    assert window.progress.maximum() == 0
+
+
+def test_a_phase_gives_the_bar_its_total(
+    window: MainWindow, reporter: QtReporter
+) -> None:
+    window.search_button.click()
+
+    _report(reporter, PhaseStarted(Phase.VACANCIES, 19))
+
+    assert window.progress.maximum() == 19
+    assert window.progress.value() == 0
+
+
+def test_the_bar_follows_the_count_the_event_carries(
+    window: MainWindow, reporter: QtReporter
+) -> None:
+    _report(
+        reporter,
+        PhaseStarted(Phase.VACANCIES, 19),
+        ItemCompleted(Phase.VACANCIES, 1, 19, "Cartago", 3),
+        ItemCompleted(Phase.VACANCIES, 2, 19, "Alajuela", 2),
+    )
+
+    assert window.progress.value() == 2
+
+
+def test_the_bar_does_not_go_backwards_when_workers_finish_out_of_order(
+    window: MainWindow, reporter: QtReporter
+) -> None:
+    """The appointments phase runs four at once and reports in the order they
+    finish, so the labels arrive shuffled while index stays a count. A bar
+    driven by anything other than index would jump around."""
+    _report(
+        reporter,
+        PhaseStarted(Phase.APPOINTMENTS, 45, concurrency=4),
+        ItemCompleted(Phase.APPOINTMENTS, 1, 45, "1548639", 0),
+        ItemCompleted(Phase.APPOINTMENTS, 2, 45, "1548490", 1),
+        ItemCompleted(Phase.APPOINTMENTS, 3, 45, "1548582", 0),
+    )
+
+    assert window.progress.value() == 3
+
+
+def test_the_status_bar_says_which_phase_and_how_far(
+    window: MainWindow, reporter: QtReporter
+) -> None:
+    _report(
+        reporter,
+        PhaseStarted(Phase.VACANCIES, 19),
+        ItemCompleted(Phase.VACANCIES, 3, 19, "Cartago", 3),
+    )
+
+    message = window.statusBar().currentMessage()
+
+    assert "Vacantes" in message
+    assert "3 de 19" in message
+    assert "Cartago" in message
+
+
+def test_a_finished_phase_fills_the_bar(
+    window: MainWindow, reporter: QtReporter
+) -> None:
+    _report(
+        reporter,
+        PhaseStarted(Phase.VACANCIES, 19),
+        ItemCompleted(Phase.VACANCIES, 1, 19, "Cartago", 3),
+        PhaseFinished(Phase.VACANCIES, 45),
+    )
+
+    assert window.progress.value() == window.progress.maximum()
+
+
+def test_a_finished_phase_says_what_it_came_to(
+    window: MainWindow, reporter: QtReporter
+) -> None:
+    """Said between the two phases, so the user learns the vacancy count before
+    the appointments phase starts counting from zero again."""
+    _report(reporter, PhaseStarted(Phase.VACANCIES, 19), PhaseFinished(Phase.VACANCIES, 45))
+
+    assert window.statusBar().currentMessage() == "45 vacantes."
+
+
+def test_a_finished_phase_reports_what_it_could_not_read(
+    window: MainWindow, reporter: QtReporter
+) -> None:
+    _report(
+        reporter,
+        PhaseStarted(Phase.VACANCIES, 19),
+        PhaseFinished(Phase.VACANCIES, 42, failed=2),
+    )
+
+    assert window.statusBar().currentMessage() == "42 vacantes, 2 sin respuesta."
+
+
+def test_the_second_phase_starts_the_bar_over(
+    window: MainWindow, reporter: QtReporter
+) -> None:
+    """Two phases run back to back, and the appointments one has a total of its
+    own. A bar left full would show the second phase as already done."""
+    _report(
+        reporter,
+        PhaseStarted(Phase.VACANCIES, 19),
+        PhaseFinished(Phase.VACANCIES, 45),
+        PhaseStarted(Phase.APPOINTMENTS, 45, concurrency=4),
+    )
+
+    assert window.progress.maximum() == 45
+    assert window.progress.value() == 0
+
+
+def test_the_bar_goes_away_when_the_result_arrives(
+    window: MainWindow, reporter: QtReporter
+) -> None:
+    window.search_button.click()
+    _report(reporter, PhaseStarted(Phase.APPOINTMENTS, 45), PhaseFinished(Phase.APPOINTMENTS, 12))
+
+    _emit(_worker(window).searched, _result())
+
+    assert window.progress.isHidden() is True
+
+
+def test_the_bar_goes_away_when_a_run_fails(
+    window: MainWindow, reporter: QtReporter
+) -> None:
+    """A bar left on screen after a failure says the run is still going."""
+    window.search_button.click()
+    _report(reporter, PhaseStarted(Phase.VACANCIES, 19))
+
+    _emit(_worker(window).failed, PermanentScrapingError("nope"))
+
+    assert window.progress.isHidden() is True
+
+
+def test_an_unknown_event_is_ignored(window: MainWindow, reporter: QtReporter) -> None:
+    """The reporter carries one signal for every event type so that an event
+    added later lands in the same slot. It has to fall through rather than
+    raise, which would take down a run for a message nobody needed."""
+    window.search_button.click()
+
+    _report(reporter, object())
+
+    assert window.progress.isHidden() is False

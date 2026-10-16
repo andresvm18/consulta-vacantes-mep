@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QProgressBar,
     QPushButton,
     QSpinBox,
     QTableWidget,
@@ -34,6 +35,14 @@ from PySide6.QtWidgets import (
 )
 
 from consulta_vacantes_mep.app.session import SearchResult
+from consulta_vacantes_mep.events import (
+    Event,
+    ItemCompleted,
+    Phase,
+    PhaseFinished,
+    PhaseStarted,
+)
+from consulta_vacantes_mep.gui.reporter import QtReporter
 from consulta_vacantes_mep.gui.worker import SearchWorker
 from consulta_vacantes_mep.labels import APPOINTMENT_LABELS, VACANCY_LABELS
 from consulta_vacantes_mep.models import Appointment, Vacancy
@@ -43,6 +52,13 @@ from consulta_vacantes_mep.utils.logger import get_logger
 logger = get_logger(__name__)
 
 WINDOW_TITLE = "Consulta Vacantes MEP"
+
+# What each scraping phase is called on screen. The tabs are named from the
+# same place as the progress line, so the user reads one word for one thing.
+PHASE_TITLES = {
+    Phase.VACANCIES: "Vacantes",
+    Phase.APPOINTMENTS: "Nombramientos",
+}
 
 # Qt's own bounds are enormous and a year outside this range is a typo.
 MIN_YEAR = 2000
@@ -112,7 +128,7 @@ class MainWindow(QMainWindow):
     search is cheap. It also lets a test drive the window without a browser.
     """
 
-    def __init__(self, worker: SearchWorker) -> None:
+    def __init__(self, worker: SearchWorker, reporter: QtReporter) -> None:
         super().__init__()
         self._worker = worker
 
@@ -122,6 +138,10 @@ class MainWindow(QMainWindow):
         self._worker.searched.connect(self._on_searched)
         self._worker.refreshed.connect(self._on_refreshed)
         self._worker.failed.connect(self._on_failed)
+
+        # Connected here, on the thread that owns the widgets, which is what
+        # makes Qt queue the events the scrapers emit from their own threads.
+        reporter.progressed.connect(self._on_progress)
 
     # ── Laying it out ────────────────────────────────────────────────────────
     def _build(self) -> None:
@@ -153,11 +173,16 @@ class MainWindow(QMainWindow):
         self.appointments_table = _table(APPOINTMENT_COLUMNS, APPOINTMENT_LABELS)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(self.vacancies_table, "Vacantes")
-        self.tabs.addTab(self.appointments_table, "Nombramientos")
+        self.tabs.addTab(self.vacancies_table, PHASE_TITLES[Phase.VACANCIES])
+        self.tabs.addTab(self.appointments_table, PHASE_TITLES[Phase.APPOINTMENTS])
+
+        self.progress = QProgressBar()
+        self.progress.setTextVisible(False)
+        self.progress.hide()
 
         layout = QVBoxLayout()
         layout.addLayout(controls)
+        layout.addWidget(self.progress)
         layout.addWidget(self.tabs, stretch=1)
 
         central = QWidget()
@@ -188,6 +213,75 @@ class MainWindow(QMainWindow):
 
         self._set_busy(message="Actualizando la lista de vacantes...")
         self._worker.refresh()
+
+    # ── While a run is going ─────────────────────────────────────────────────
+    def _on_progress(self, event: Event) -> None:
+        """Show how far along the run is.
+
+        Matched on rather than handled by one slot per event type, which is why
+        the reporter has a single signal: an event added later lands here and
+        falls through without breaking anything.
+        """
+        match event:
+            case PhaseStarted():
+                self._phase_started(event)
+
+            case ItemCompleted():
+                self._item_completed(event)
+
+            case PhaseFinished():
+                self._phase_finished(event)
+
+    def _phase_started(self, event: PhaseStarted) -> None:
+        """Give the bar something to measure against.
+
+        Until this arrives the bar has no total, because the scraper cannot know
+        one until it has loaded the page and read the dropdown. It spends that
+        time as a busy indicator rather than sitting at zero, which would read
+        as nothing happening.
+        """
+        self.progress.setRange(0, event.total)
+        self.progress.setValue(0)
+        self.statusBar().showMessage(self._phase_line(event.phase, 0, event.total))
+
+    def _item_completed(self, event: ItemCompleted) -> None:
+        """Advance to the count the event carries, not by one.
+
+        index is how many have finished, which is what events.py promises and
+        what both phases emit. Counting arrivals here instead would drift from
+        the truth if an event were ever missed, and the appointments phase
+        reports in the order four workers happen to finish.
+        """
+        self.progress.setValue(event.index)
+        self.statusBar().showMessage(
+            self._phase_line(event.phase, event.index, event.total, event.label)
+        )
+
+    def _phase_finished(self, event: PhaseFinished) -> None:
+        """Fill the bar and say what the phase came to.
+
+        Worth saying between the two phases: the user learns how many vacancies
+        were found before the appointments phase starts counting from zero
+        again, which otherwise looks like the run restarting.
+
+        total is records collected, not items processed, so the noun comes from
+        the phase. The bar is reset by the next phase and hidden once the result
+        arrives.
+        """
+        self.progress.setValue(self.progress.maximum())
+
+        found = f"{event.total} {PHASE_TITLES[event.phase].lower()}"
+        failures = f", {event.failed} sin respuesta" if event.failed else ""
+
+        self.statusBar().showMessage(f"{found}{failures}.")
+
+    def _phase_line(
+        self, phase: Phase, done: int, total: int, label: str | None = None
+    ) -> str:
+        """What the status bar says mid-run: the phase, the count, and where it is."""
+        line = f"{PHASE_TITLES[phase]}: {done} de {total}"
+
+        return f"{line} · {label}" if label else line
 
     # ── What comes back ──────────────────────────────────────────────────────
     def _on_searched(self, result: SearchResult) -> None:
@@ -234,10 +328,17 @@ class MainWindow(QMainWindow):
         double-clicking.
         """
         self._enable_controls(enabled=False)
+
+        # No total yet: the first phase cannot report one until it has read the
+        # dropdown, and a range of nothing is how Qt draws a busy indicator.
+        self.progress.setRange(0, 0)
+        self.progress.show()
+
         self.statusBar().showMessage(message)
 
     def _set_idle(self, *, message: str) -> None:
         self._enable_controls(enabled=True)
+        self.progress.hide()
         self.statusBar().showMessage(message)
 
     def _enable_controls(self, *, enabled: bool) -> None:

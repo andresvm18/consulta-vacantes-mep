@@ -41,6 +41,12 @@ class ItemCompleted:
     label is the office name or the vacancy number, whichever the phase works
     on. count is how many records it produced, and None means the item failed
     and the run continued without it.
+
+    index is how many items of this phase have finished, this one included, so
+    it runs from 1 to total and never goes backwards. That is worth saying
+    because the appointments phase has four workers and reports in the order
+    they finish rather than the order they were queued: index is a count, not a
+    position in the input, and a consumer can set a progress bar to it directly.
     """
 
     phase: Phase
