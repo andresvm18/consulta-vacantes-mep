@@ -8,7 +8,9 @@ The window is never shown. Nothing asserted here needs pixels, and the platform
 is offscreen anyway; see tests/gui/conftest.py.
 """
 
+import zipfile
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QObject, Signal, SignalInstance
@@ -22,9 +24,12 @@ from consulta_vacantes_mep.events import (
     PhaseStarted,
 )
 from consulta_vacantes_mep.exceptions import PermanentScrapingError
+from consulta_vacantes_mep.exports import excel as excel_module
+from consulta_vacantes_mep.gui import window as window_module
 from consulta_vacantes_mep.gui.reporter import QtReporter
 from consulta_vacantes_mep.gui.window import (
     APPOINTMENT_COLUMNS,
+    EXPORT_FAILURE_MESSAGE,
     FAILURE_MESSAGE,
     PHASE_TITLES,
     VACANCY_COLUMNS,
@@ -677,3 +682,195 @@ def test_an_unknown_event_is_ignored(window: MainWindow, reporter: QtReporter) -
     _report(reporter, object())
 
     assert window.progress.isHidden() is False
+
+
+# ── Exporting ─────────────────────────────────────────────────────────────────
+@pytest.fixture
+def outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Send workbooks somewhere the test can read and nothing else can see."""
+    monkeypatch.setattr(excel_module, "OUTPUT_DIR", tmp_path)
+
+    return tmp_path
+
+
+def _written(outputs: Path) -> Path:
+    files = sorted(outputs.glob("*.xlsx"))
+
+    assert len(files) == 1, f"expected one workbook, found {len(files)}"
+
+    return files[0]
+
+
+def _contents(path: Path) -> bytes:
+    """Everything inside the workbook, uncompressed.
+
+    An xlsx is a zip, so searching the file's own bytes for a value finds
+    nothing whether or not it is in there, which would make a test for the
+    absence of something pass for the wrong reason. Reading the parts also
+    reaches the shared string table, where openpyxl keeps cell text.
+    """
+    with zipfile.ZipFile(path) as archive:
+        return b"".join(archive.read(name) for name in archive.namelist())
+
+
+def test_there_is_nothing_to_export_before_a_search(window: MainWindow) -> None:
+    """A button that writes an empty file is worse than one that is greyed."""
+    assert window.export_button.isEnabled() is False
+
+
+def test_exporting_becomes_possible_once_there_are_results(
+    window: MainWindow,
+) -> None:
+    _emit(_worker(window).searched, _result(found=["1548582"]))
+
+    assert window.export_button.isEnabled() is True
+
+
+def test_exporting_is_not_possible_during_a_run(window: MainWindow) -> None:
+    _emit(_worker(window).searched, _result(found=["1548582"]))
+
+    window.search_button.click()
+
+    assert window.export_button.isEnabled() is False
+
+
+def test_the_personal_data_box_starts_unchecked(window: MainWindow) -> None:
+    """The same default the command has, read from the same setting, so one
+    environment variable still governs both."""
+    assert window.personal_data.isChecked() is False
+
+
+def test_a_workbook_is_written(window: MainWindow, outputs: Path) -> None:
+    _emit(_worker(window).searched, _result(found=["1548582"]))
+
+    window.export_button.click()
+
+    assert _written(outputs).exists()
+
+
+def test_the_window_says_where_the_file_went(
+    window: MainWindow, outputs: Path
+) -> None:
+    _emit(_worker(window).searched, _result(found=["1548582"]))
+
+    window.export_button.click()
+
+    assert str(_written(outputs)) in window.statusBar().currentMessage()
+
+
+def test_the_file_is_named_for_the_specialty_that_was_searched(
+    window: MainWindow, outputs: Path
+) -> None:
+    """The same rule the command uses, which is why it moved into the export
+    layer rather than being written out twice."""
+    window.specialty.setText("Educación Física")
+    window.search_button.click()
+    _emit(_worker(window).searched, _result(found=["1548582"]))
+
+    window.export_button.click()
+
+    assert _written(outputs).name.startswith("vacantes_Educación_Física_")
+
+
+def test_a_search_for_everything_is_named_for_everything(
+    window: MainWindow, outputs: Path
+) -> None:
+    window.search_button.click()
+    _emit(_worker(window).searched, _result(found=["1548582"]))
+
+    window.export_button.click()
+
+    assert _written(outputs).name.startswith("todas_las_vacantes_")
+
+
+def test_the_identification_number_is_left_out_by_default(
+    window: MainWindow, outputs: Path
+) -> None:
+    """The window never shows it, and by default the file does not carry it
+    either. Checked against the bytes, since openpyxl keeps strings in a part of
+    the archive of their own."""
+    _emit(_worker(window).searched, _result(found=["1548582"]))
+
+    window.export_button.click()
+
+    assert CEDULA.encode() not in _contents(_written(outputs))
+
+
+def test_the_identification_number_is_written_when_the_box_is_checked(
+    window: MainWindow, outputs: Path
+) -> None:
+    _emit(_worker(window).searched, _result(found=["1548582"]))
+    window.personal_data.setChecked(True)
+
+    window.export_button.click()
+
+    assert CEDULA.encode() in _contents(_written(outputs))
+
+
+def test_a_file_that_cannot_be_written_is_explained_in_spanish(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The case that actually happens on Windows: the user exports, opens the
+    file, exports again within the same minute, and Excel is holding it."""
+    _emit(_worker(window).searched, _result(found=["1548582"]))
+
+    def _locked(*_args: object, **_kwargs: object) -> None:
+        message = "[Errno 13] Permission denied"
+        raise PermissionError(message)
+
+    monkeypatch.setattr(window_module, "export_data_to_excel", _locked)
+
+    window.export_button.click()
+
+    assert window.statusBar().currentMessage() == EXPORT_FAILURE_MESSAGE
+
+
+def test_a_failed_export_leaves_the_button_usable(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Closing Excel and clicking again is the fix, so the button has to still
+    be there."""
+    _emit(_worker(window).searched, _result(found=["1548582"]))
+
+    def _locked(*_args: object, **_kwargs: object) -> None:
+        message = "[Errno 13] Permission denied"
+        raise PermissionError(message)
+
+    monkeypatch.setattr(window_module, "export_data_to_excel", _locked)
+
+    window.export_button.click()
+
+    assert window.export_button.isEnabled() is True
+
+
+# ── What a refresh does to the results ────────────────────────────────────────
+def test_a_refresh_clears_what_was_on_screen(window: MainWindow) -> None:
+    """Refreshing exists for when the site has published something new, so the
+    rows from before answer the same question asked of different data."""
+    worker = _worker(window)
+    _emit(worker.searched, _result(found=["1548582"]))
+
+    _emit(worker.refreshed, 45)
+
+    assert window.vacancies_table.rowCount() == 0
+    assert window.appointments_table.rowCount() == 0
+
+
+def test_a_refresh_takes_exporting_away(window: MainWindow) -> None:
+    """Otherwise the one way to get a file the user believes is current and is
+    not: export rows scraped before the refresh they just asked for."""
+    worker = _worker(window)
+    _emit(worker.searched, _result(found=["1548582"]))
+
+    _emit(worker.refreshed, 45)
+
+    assert window.export_button.isEnabled() is False
+
+
+def test_a_refresh_says_a_search_is_the_next_step(window: MainWindow) -> None:
+    _emit(_worker(window).refreshed, 45)
+
+    message = window.statusBar().currentMessage()
+
+    assert "45 vacantes" in message
+    assert "búsqueda" in message

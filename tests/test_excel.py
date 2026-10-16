@@ -18,7 +18,7 @@ from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from consulta_vacantes_mep.exports import excel as excel_module
-from consulta_vacantes_mep.exports.excel import export_data_to_excel
+from consulta_vacantes_mep.exports.excel import export_data_to_excel, filename_prefix
 from consulta_vacantes_mep.labels import (
     APPOINTMENT_LABELS,
     PERSONAL_FIELDS,
@@ -366,3 +366,33 @@ def test_a_long_value_does_not_widen_a_column_without_limit() -> None:
     widths = _sheet(path, "Vacantes").column_dimensions
 
     assert widths["E"].width == EXPORT.max_column_width
+
+
+# ── What the file is called ───────────────────────────────────────────────────
+def test_a_search_for_everything_is_named_for_everything() -> None:
+    assert filename_prefix(None) == "todas_las_vacantes"
+
+
+def test_an_empty_specialty_is_the_same_as_none() -> None:
+    """Both interfaces turn a blank field into None, but neither should have to
+    be the thing that remembers to."""
+    assert filename_prefix("") == "todas_las_vacantes"
+
+
+def test_a_specialty_is_named_for_itself() -> None:
+    assert filename_prefix("Francés") == "vacantes_Francés"
+
+
+def test_spaces_in_a_specialty_become_underscores() -> None:
+    """The source publishes several two-word specialties, and a filename with a
+    space in it is harder to hand to anything that splits on whitespace."""
+    assert filename_prefix("Educación Física") == "vacantes_Educación_Física"
+
+
+def test_the_prefix_reaches_the_file() -> None:
+    """The rule lives here rather than in an interface, so this is where it is
+    checked against a real name."""
+    path = export_data_to_excel(PUBLISHED, filename_prefix=filename_prefix("Francés"))
+
+    assert path is not None
+    assert path.name.startswith("vacantes_Francés_")

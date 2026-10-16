@@ -33,6 +33,24 @@ from consulta_vacantes_mep.utils.paths import OUTPUT_DIR
 logger = get_logger(__name__)
 
 
+def filename_prefix(specialty: str | None) -> str:
+    """What to call the workbook a search produced.
+
+    Here rather than in whichever interface asked for the export, because both
+    of them want the same answer: a user who exports from the window one day and
+    from a command the next should not end up with two naming schemes in the
+    same folder.
+
+    Spaces become underscores. A file named for a two-word specialty is harder
+    to pass to anything that splits on whitespace, and the source publishes a
+    few of those.
+    """
+    if not specialty:
+        return "todas_las_vacantes"
+
+    return f"vacantes_{specialty.replace(' ', '_')}"
+
+
 def format_worksheet(worksheet: Worksheet) -> None:
     """Style the heading row and size the columns to their contents."""
     header_fill = PatternFill(

@@ -21,7 +21,7 @@ from consulta_vacantes_mep.app.session import SearchResult, Session
 from consulta_vacantes_mep.app.startup import ensure_chromium
 from consulta_vacantes_mep.cli.menu import ask_year, show_welcome_menu
 from consulta_vacantes_mep.cli.reporter import RichReporter
-from consulta_vacantes_mep.exports.excel import export_data_to_excel
+from consulta_vacantes_mep.exports.excel import export_data_to_excel, filename_prefix
 from consulta_vacantes_mep.models import Appointment, Vacancy
 from consulta_vacantes_mep.settings import EXPORT, default_year
 from consulta_vacantes_mep.utils.logger import configure_logging
@@ -144,9 +144,11 @@ def export_result(
     include_personal: bool = EXPORT.include_personal_data,
 ) -> None:
     """Write the workbook and say where it landed."""
-    prefix = f"vacantes_{specialty.replace(' ', '_')}" if specialty else "todas_las_vacantes"
     file_path = export_data_to_excel(
-        vacancies, appointments, prefix, include_personal=include_personal
+        vacancies,
+        appointments,
+        filename_prefix(specialty),
+        include_personal=include_personal,
     )
 
     if file_path:

@@ -19,6 +19,7 @@ whoever walks past.
 
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -42,11 +43,12 @@ from consulta_vacantes_mep.events import (
     PhaseFinished,
     PhaseStarted,
 )
+from consulta_vacantes_mep.exports.excel import export_data_to_excel, filename_prefix
 from consulta_vacantes_mep.gui.reporter import QtReporter
 from consulta_vacantes_mep.gui.worker import SearchWorker
 from consulta_vacantes_mep.labels import APPOINTMENT_LABELS, VACANCY_LABELS
 from consulta_vacantes_mep.models import Appointment, Vacancy
-from consulta_vacantes_mep.settings import default_year
+from consulta_vacantes_mep.settings import EXPORT, default_year
 from consulta_vacantes_mep.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -91,6 +93,15 @@ FAILURE_MESSAGE = (
     "el detalle quedó en el archivo de registro."
 )
 
+# The one that actually happens: the user exports, opens the file, exports
+# again, and Windows refuses to overwrite a workbook Excel has open. The
+# timestamp in the name only goes down to the minute, so a second export within
+# the same minute lands on the same file.
+EXPORT_FAILURE_MESSAGE = (
+    "No se pudo escribir el archivo. Si lo tiene abierto en Excel, ciérrelo e "
+    "intente de nuevo; el detalle quedó en el archivo de registro."
+)
+
 
 def _table(columns: tuple[str, ...], labels: dict[str, str]) -> QTableWidget:
     """A read-only table of whole rows, headed in Spanish."""
@@ -131,6 +142,13 @@ class MainWindow(QMainWindow):
     def __init__(self, worker: SearchWorker, reporter: QtReporter) -> None:
         super().__init__()
         self._worker = worker
+
+        # What the tables are showing, kept so it can be exported. A refresh
+        # clears it: the cache it rescraped is a different snapshot from the one
+        # these rows came from, and exporting the old one afterwards would hand
+        # the user a file that disagrees with what they just asked for.
+        self._result: SearchResult | None = None
+        self._specialty: str | None = None
 
         self.setWindowTitle(WINDOW_TITLE)
         self._build()
@@ -176,6 +194,22 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.vacancies_table, PHASE_TITLES[Phase.VACANCIES])
         self.tabs.addTab(self.appointments_table, PHASE_TITLES[Phase.APPOINTMENTS])
 
+        self.personal_data = QCheckBox("Incluir cédula y nombre")
+        self.personal_data.setChecked(EXPORT.include_personal_data)
+        self.personal_data.setToolTip(
+            "Un archivo con estos datos identifica a personas. "
+            "Trátelo en consecuencia."
+        )
+
+        self.export_button = QPushButton("Exportar a Excel")
+        self.export_button.setEnabled(False)
+        self.export_button.clicked.connect(self.export)
+
+        exporting = QHBoxLayout()
+        exporting.addWidget(self.personal_data)
+        exporting.addStretch(1)
+        exporting.addWidget(self.export_button)
+
         self.progress = QProgressBar()
         self.progress.setTextVisible(False)
         self.progress.hide()
@@ -184,6 +218,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(controls)
         layout.addWidget(self.progress)
         layout.addWidget(self.tabs, stretch=1)
+        layout.addLayout(exporting)
 
         central = QWidget()
         central.setLayout(layout)
@@ -202,6 +237,8 @@ class MainWindow(QMainWindow):
             return
 
         specialty = self.specialty.text().strip() or None
+
+        self._specialty = specialty
 
         self._set_busy(message="Consultando vacantes y nombramientos...")
         self._worker.search(self.year.value(), specialty)
@@ -285,13 +322,26 @@ class MainWindow(QMainWindow):
 
     # ── What comes back ──────────────────────────────────────────────────────
     def _on_searched(self, result: SearchResult) -> None:
+        self._result = result
+
         _fill(self.vacancies_table, VACANCY_COLUMNS, result.vacancies)
         _fill(self.appointments_table, APPOINTMENT_COLUMNS, result.appointments)
 
         self._set_idle(message=self._summary(result))
 
     def _on_refreshed(self, total: int) -> None:
-        self._set_idle(message=f"{total} vacantes publicadas.")
+        """Forget what was on screen, because it is about an older snapshot.
+
+        Refreshing exists for when the site has published something new, so the
+        rows from before are answers to the same question asked of different
+        data. Leaving them up, exportable, would be the one way to end up with a
+        file the user believes is current and is not.
+        """
+        self._result = None
+        self.vacancies_table.setRowCount(0)
+        self.appointments_table.setRowCount(0)
+
+        self._set_idle(message=f"{total} vacantes publicadas. Haga una búsqueda.")
 
     def _on_failed(self, error: Exception) -> None:
         """Say in Spanish that it did not work, and leave the why to the log.
@@ -318,6 +368,39 @@ class MainWindow(QMainWindow):
             parts.append(f"{len(result.failed)} sin respuesta")
 
         return ", ".join(parts) + "."
+
+    # ── Exporting ────────────────────────────────────────────────────────────
+    def export(self) -> None:
+        """Write the workbook, and say where it went.
+
+        On the interface thread, unlike a search: writing fifty rows takes
+        milliseconds, so a thread would cost more in machinery than it saves in
+        responsiveness.
+        """
+        if self._result is None:
+            return
+
+        include_personal = self.personal_data.isChecked()
+
+        try:
+            path = export_data_to_excel(
+                self._result.vacancies,
+                self._result.appointments,
+                filename_prefix(self._specialty),
+                include_personal=include_personal,
+            )
+
+        except OSError:
+            logger.exception("The workbook could not be written")
+            self.statusBar().showMessage(EXPORT_FAILURE_MESSAGE)
+            return
+
+        if path is None:
+            self.statusBar().showMessage("No hay nada que exportar.")
+            return
+
+        logger.info("Workbook written to %s", path)
+        self.statusBar().showMessage(f"Archivo generado: {path}")
 
     # ── Busy or not ──────────────────────────────────────────────────────────
     def _set_busy(self, *, message: str) -> None:
@@ -347,5 +430,10 @@ class MainWindow(QMainWindow):
             self.year,
             self.search_button,
             self.refresh_button,
+            self.personal_data,
         ):
             widget.setEnabled(enabled)
+
+        # Exporting needs something to export, which a run in progress and a
+        # refresh both leave the window without.
+        self.export_button.setEnabled(enabled and self._result is not None)
