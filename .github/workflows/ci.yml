@@ -65,5 +65,14 @@ jobs:
       - name: Install Chromium
         run: python -m playwright install --with-deps chromium
 
+      # Qt links these whatever platform plugin is in use: the list comes from
+      # libQt6Gui, not from the plugin, so offscreen needs them as much as a
+      # real display would. Chromium's own dependencies, installed above, cover
+      # the rest of what Qt wants. The suite itself asks for the offscreen
+      # platform, so there is no environment variable to set here; see
+      # tests/gui/conftest.py.
+      - name: Install the libraries Qt links against
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0
+
       - name: Pytest
         run: pytest
