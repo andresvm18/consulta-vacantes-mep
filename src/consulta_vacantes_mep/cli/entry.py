@@ -1,4 +1,9 @@
-"""The terminal interface, and the entry point that runs it.
+"""The terminal interface, and the entry point that decides which one runs.
+
+Running with no subcommand opens the window. The commands below are the
+scriptable half: the same searches, with their answers on standard output
+instead of in a table a person clicks on. The interactive menu that used to
+live here is gone, since everything it offered the window offers better.
 
 Named entry rather than main because the cli package reexports the main
 function, and a submodule of the same name was shadowed by it: importing
@@ -19,7 +24,6 @@ from rich.table import Table
 
 from consulta_vacantes_mep.app.session import SearchResult, Session
 from consulta_vacantes_mep.app.startup import ensure_chromium
-from consulta_vacantes_mep.cli.menu import ask_year, show_welcome_menu
 from consulta_vacantes_mep.cli.reporter import RichReporter
 from consulta_vacantes_mep.exports.excel import export_data_to_excel, filename_prefix
 from consulta_vacantes_mep.models import Appointment, Vacancy
@@ -158,68 +162,6 @@ def export_result(
             console.print("  Sin cédula ni nombre. Use --datos-personales para incluirlos.")
 
 
-def ask_export(result: SearchResult, specialty: str | None = None) -> None:
-    """Offer to write the workbook. Only called when there is something in it."""
-    answer = console.input("\n  ¿Desea exportar los resultados a Excel? (S/N): ").strip().lower()
-
-    if answer != "s":
-        console.print("  Resultados no exportados.")
-        return
-
-    export_result(result.vacancies, result.appointments, specialty)
-
-
-def run_search(
-    session: Session, specialty: str | None = None, *, refresh: bool = False
-) -> None:
-    """Run one search and show it.
-
-    The two search options differ in one thing, whether a specialty narrows the
-    vacancies down, so they share this.
-    """
-    year = ask_year(console)
-
-    if session.cached_count is not None and not refresh:
-        console.print(f"\n  Usando {session.cached_count} vacantes ya consultadas.")
-
-    result = session.search(year, specialty, refresh=refresh)
-
-    if not result.vacancies:
-        console.print("\n  No se encontraron vacantes para esa búsqueda.")
-        return
-
-    show_result(result)
-    ask_export(result, specialty)
-
-
-def run_menu(session: Session) -> None:
-    """Drive the menu until the user leaves."""
-    while True:
-        option = show_welcome_menu(console)
-
-        if option == "1":
-            run_search(session)
-
-        elif option == "2":
-            specialty = console.input("\n  Ingrese la especialidad a buscar: ").strip()
-
-            if not specialty:
-                console.print("\n  [yellow]Debe ingresar una especialidad válida.[/yellow]")
-                console.input("\n  Presione Enter para continuar...")
-                continue
-
-            run_search(session, specialty)
-
-        elif option == "3":
-            session.vacancies(refresh=True)
-
-        else:
-            console.print("\n  Gracias por usar el sistema. Hasta luego.")
-            return
-
-        console.input("\n  Presione Enter para continuar...")
-
-
 def new_session() -> tuple[Session, RichReporter]:
     """A session and the reporter drawing it, which the caller has to close."""
     reporter = RichReporter(console)
@@ -228,23 +170,22 @@ def new_session() -> tuple[Session, RichReporter]:
 
 @app.callback(invoke_without_command=True)
 def entry_point(ctx: typer.Context) -> None:
-    """Runs before every subcommand, and opens the menu when there is none."""
+    """Open the window, unless a subcommand asked for the terminal instead."""
+    if ctx.invoked_subcommand is None:
+        # Imported here rather than at the top of the module. PySide6.QtWidgets
+        # takes about 150 milliseconds to import against the 330 this module
+        # already costs, and the terminal path never needs a single widget.
+        from consulta_vacantes_mep.gui.entry import main as run_window  # noqa: PLC0415
+
+        raise typer.Exit(code=run_window())
+
+    # Only the terminal path configures logging against the console, and only it
+    # checks the browser here. The window does both for itself, with a dialog
+    # instead of a printed line.
     configure_logging(console=console)
 
     if not prepare_browser():
         raise typer.Exit(code=1)
-
-    if ctx.invoked_subcommand is not None:
-        return
-
-    session, reporter = new_session()
-
-    try:
-        run_menu(session)
-    finally:
-        # A phase that raises never emits its closing event, so the live display
-        # has to be taken down here or the terminal keeps its drawing mode.
-        reporter.close()
 
 
 @app.command("buscar")

@@ -17,6 +17,7 @@ from consulta_vacantes_mep.app import startup
 from consulta_vacantes_mep.app.session import SearchResult
 from consulta_vacantes_mep.cli import entry as entry_module
 from consulta_vacantes_mep.cli.entry import app, prepare_browser, show_result
+from consulta_vacantes_mep.gui import entry as gui_entry
 from consulta_vacantes_mep.models import (
     Appointment,
     AppointmentQuery,
@@ -394,16 +395,14 @@ def test_the_identification_number_stays_off_the_terminal(screen: StringIO) -> N
     """Scrollback outlives the run, and nobody consults this to find one."""
     show_result(_found("1531185"))
 
-    written = visible(screen.getvalue())
-    assert CEDULA not in written
+    assert CEDULA not in visible(screen.getvalue())
 
 
 def test_the_name_is_shown(screen: StringIO) -> None:
     """Whether a post was filled, and by whom, is the question being asked."""
     show_result(_found("1531185"))
 
-    written = visible(screen.getvalue())
-    assert "Persona De Prueba" in written
+    assert "Persona De Prueba" in visible(screen.getvalue())
 
 
 def test_each_appointment_takes_one_line(screen: StringIO) -> None:
@@ -455,3 +454,85 @@ def test_a_failed_lookup_is_still_reported(screen: StringIO) -> None:
 
     assert "1536996" in written
     assert "no se pudieron consultar" in written
+
+
+# ── Which interface runs ──────────────────────────────────────────────────────
+@pytest.fixture
+def window_opens(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Stand in for opening the window, recording that it was asked for.
+
+    Patched on the gui module rather than on this one: the callback imports it
+    inside the branch, so the name is looked up there when the branch runs.
+    """
+    opened: list[int] = []
+
+    def _run() -> int:
+        opened.append(0)
+        return 0
+
+    monkeypatch.setattr(gui_entry, "main", _run)
+
+    return opened
+
+
+def test_no_subcommand_opens_the_window(
+    runner: CliRunner, window_opens: list[int]
+) -> None:
+    """What most people will do: run it with nothing after the name."""
+    result = _invoke(runner)
+
+    assert window_opens == [0]
+    assert result.exit_code == 0
+
+
+def test_the_window_decides_the_exit_code(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A window that could not open has to be able to say so to whatever
+    launched it."""
+    monkeypatch.setattr(gui_entry, "main", lambda: 1)
+
+    assert _invoke(runner).exit_code == 1
+
+
+def test_opening_the_window_does_not_check_the_browser_here(
+    runner: CliRunner, window_opens: list[int], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The window does its own check, with a dialog. Doing it twice would cost
+    a second and report the failure on a terminal nobody is reading."""
+
+    def explode() -> bool:
+        message = "the terminal's browser check ran on the way to the window"
+        raise AssertionError(message)
+
+    monkeypatch.setattr(startup, "chromium_is_available", explode)
+
+    _invoke(runner)
+
+    assert window_opens == [0]
+
+
+def test_a_subcommand_checks_the_browser(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The terminal path still pays for it up front, so a search does not get
+    half way in before finding there is nothing to drive."""
+    checked: list[str] = []
+
+    def _check() -> bool:
+        checked.append("checked")
+        return True
+
+    monkeypatch.setattr(startup, "chromium_is_available", _check)
+
+    _invoke(runner, "vacantes")
+
+    assert checked == ["checked"]
+
+
+def test_a_subcommand_does_not_open_the_window(
+    runner: CliRunner, window_opens: list[int]
+) -> None:
+    _invoke(runner, "vacantes")
+
+    assert window_opens == []

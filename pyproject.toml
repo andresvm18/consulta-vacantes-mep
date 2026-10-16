@@ -14,6 +14,10 @@ authors = [{ name = "Andres Viquez Marchena" }]
 keywords = ["scraping", "playwright", "costa-rica", "education", "job-vacancies"]
 classifiers = [
     "Development Status :: 3 - Alpha",
+    # Both, in the order they matter: running the command with no subcommand
+    # opens the window, and the subcommands are the scriptable half.
+    "Environment :: X11 Applications :: Qt",
+    "Environment :: Win32 (MS Windows)",
     "Environment :: Console",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: Apache Software License",
