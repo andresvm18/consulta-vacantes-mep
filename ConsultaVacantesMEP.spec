@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = []
+datas = [('src/consulta_vacantes_mep/assets/icon.ico', 'consulta_vacantes_mep/assets')]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('playwright')
@@ -39,7 +39,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['icon.ico'],
+    icon=['src/consulta_vacantes_mep/assets/icon.ico'],
 )
 coll = COLLECT(
     exe,

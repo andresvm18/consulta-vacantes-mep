@@ -11,7 +11,9 @@ responsive.
 """
 
 import sys
+from pathlib import Path
 
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from consulta_vacantes_mep.app.session import Session
@@ -23,6 +25,12 @@ from consulta_vacantes_mep.utils.logger import configure_logging, get_logger
 from consulta_vacantes_mep.utils.playwright_setup import ChromiumStatus
 
 logger = get_logger(__name__)
+
+# Inside the package rather than at the root of the repository, so one relative
+# path holds in a checkout, in an installed wheel, and in the frozen build, where
+# PyInstaller lays package data out under the same names. The spec points at
+# this same file for the executable's own icon.
+ICON_FILE = Path(__file__).resolve().parent.parent / "assets" / "icon.ico"
 
 # What a failed startup means to someone looking at a dialog. Deliberately not
 # shared with the terminal's wording: the same fact reads differently in a box
@@ -98,6 +106,11 @@ def main() -> int:
     # callable from a test and from anything that already set Qt up.
     existing = QApplication.instance()
     app = existing if isinstance(existing, QApplication) else QApplication(sys.argv)
+
+    # On the application rather than the window, and before anything is shown,
+    # so the startup dialogs carry it too. The executable's icon is a different
+    # thing: it is what Explorer shows for the file, and Qt does not read it.
+    app.setWindowIcon(QIcon(str(ICON_FILE)))
 
     # No console is passed: there is no terminal the user is reading, and a
     # windowed build has no standard output to fall back on. Warnings go to the
