@@ -15,7 +15,16 @@ Columns are listed by field name and their headings come from labels.py, so the
 Spanish is defined in one place. The cédula is in neither list. Nobody opens
 this to look up an identification number, and a window left open shows it to
 whoever walks past.
+
+Exported workbooks used to be announced by their path in the status bar and
+left there. Installed, that path is a folder in Documents the user may never
+have opened, so the window now offers to open the file or show it in its
+folder right after writing it, and keeps a button that opens the folder at any
+time, for coming back to a file from another day.
 """
+
+from enum import Enum, auto
+from pathlib import Path
 
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -25,6 +34,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QSpinBox,
@@ -43,7 +53,9 @@ from consulta_vacantes_mep.events import (
     PhaseFinished,
     PhaseStarted,
 )
+from consulta_vacantes_mep.exports import excel as excel_module
 from consulta_vacantes_mep.exports.excel import export_data_to_excel, filename_prefix
+from consulta_vacantes_mep.gui import desktop
 from consulta_vacantes_mep.gui.reporter import QtReporter
 from consulta_vacantes_mep.gui.worker import SearchWorker
 from consulta_vacantes_mep.labels import APPOINTMENT_LABELS, VACANCY_LABELS
@@ -101,6 +113,55 @@ EXPORT_FAILURE_MESSAGE = (
     "No se pudo escribir el archivo. Si lo tiene abierto en Excel, ciérrelo e "
     "intente de nuevo; el detalle quedó en el archivo de registro."
 )
+
+OPEN_FOLDER_LABEL = "Abrir carpeta de exportados"
+
+EXPORTED_TITLE = "Archivo generado"
+OPEN_FILE_LABEL = "Abrir el archivo"
+SHOW_IN_FOLDER_LABEL = "Mostrar en la carpeta"
+CLOSE_LABEL = "Cerrar"
+
+
+class AfterExport(Enum):
+    """What the user chose to do with a workbook that was just written."""
+
+    OPEN_FILE = auto()
+    SHOW_IN_FOLDER = auto()
+    NOTHING = auto()
+
+
+def _ask_after_export(parent: QWidget, path: Path) -> AfterExport:
+    """Say where the workbook went, and ask whether to open it.
+
+    Wrapped so a test can replace it, for the same reason the startup dialogs
+    are: a modal box under the offscreen platform waits for a click that never
+    comes. What is worth testing is what the window does with each answer.
+    """
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Information)
+    box.setWindowTitle(EXPORTED_TITLE)
+    box.setText("El archivo se guardó en:")
+    box.setInformativeText(str(path))
+
+    # Told apart by role rather than by comparing button objects, which is what
+    # QMessageBox itself goes by. Closing the box with Escape or the title bar
+    # counts as the reject button, so it reads as Cerrar.
+    open_file = box.addButton(OPEN_FILE_LABEL, QMessageBox.ButtonRole.AcceptRole)
+    box.addButton(SHOW_IN_FOLDER_LABEL, QMessageBox.ButtonRole.ActionRole)
+    box.addButton(CLOSE_LABEL, QMessageBox.ButtonRole.RejectRole)
+    box.setDefaultButton(open_file)
+
+    box.exec()
+
+    clicked = box.clickedButton()
+
+    if clicked is None:
+        return AfterExport.NOTHING
+
+    return {
+        QMessageBox.ButtonRole.AcceptRole: AfterExport.OPEN_FILE,
+        QMessageBox.ButtonRole.ActionRole: AfterExport.SHOW_IN_FOLDER,
+    }.get(box.buttonRole(clicked), AfterExport.NOTHING)
 
 
 def _table(columns: tuple[str, ...], labels: dict[str, str]) -> QTableWidget:
@@ -205,9 +266,15 @@ class MainWindow(QMainWindow):
         self.export_button.setEnabled(False)
         self.export_button.clicked.connect(self.export)
 
+        # Never disabled. The folder is worth opening before the first search,
+        # during a run, and after a refresh alike, to find an earlier file.
+        self.open_folder_button = QPushButton(OPEN_FOLDER_LABEL)
+        self.open_folder_button.clicked.connect(self.open_exports_folder)
+
         exporting = QHBoxLayout()
         exporting.addWidget(self.personal_data)
         exporting.addStretch(1)
+        exporting.addWidget(self.open_folder_button)
         exporting.addWidget(self.export_button)
 
         self.progress = QProgressBar()
@@ -401,6 +468,38 @@ class MainWindow(QMainWindow):
 
         logger.info("Workbook written to %s", path)
         self.statusBar().showMessage(f"Archivo generado: {path}")
+
+        self._offer_to_open(path)
+
+    def _offer_to_open(self, path: Path) -> None:
+        """Ask what to do with the new workbook, and do it.
+
+        If the system will not open it, the status bar says so and names the
+        path again, since a file that cannot be opened from here can still be
+        found by hand.
+        """
+        choice = _ask_after_export(self, path)
+
+        if choice is AfterExport.OPEN_FILE:
+            opened = desktop.open_path(path)
+        elif choice is AfterExport.SHOW_IN_FOLDER:
+            opened = desktop.show_in_folder(path)
+        else:
+            return
+
+        if not opened:
+            self.statusBar().showMessage(f"No se pudo abrir. El archivo está en: {path}")
+
+    def open_exports_folder(self) -> None:
+        """Open the folder exported workbooks go to.
+
+        Read from the export module when clicked rather than once at startup,
+        so the window opens exactly the folder the next export would write to.
+        """
+        folder = excel_module.OUTPUT_DIR
+
+        if not desktop.open_folder(folder):
+            self.statusBar().showMessage(f"No se pudo abrir la carpeta: {folder}")
 
     # ── Busy or not ──────────────────────────────────────────────────────────
     def _set_busy(self, *, message: str) -> None:

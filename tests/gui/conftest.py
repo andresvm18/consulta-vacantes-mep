@@ -14,6 +14,11 @@ machine and the runner behave the same and no window flashes up during a test.
 setdefault, so a developer who wants to watch can still export another value.
 It has to be set before QtWidgets is imported anywhere, which is why it sits at
 module level above the import.
+
+Nothing here may reach the desktop either. The dialog offered after an export is
+modal and would wait forever, and opening a file or a folder would start Excel
+or Explorer on the developer's machine. Both are replaced for every test in this
+directory; a test about them puts its own recorder in their place.
 """
 
 import os
@@ -25,12 +30,26 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PySide6.QtWidgets import QApplication
 
+from consulta_vacantes_mep.gui import desktop
+from consulta_vacantes_mep.gui import window as window_module
+from consulta_vacantes_mep.gui.window import AfterExport
+
 
 @pytest.fixture(scope="session", autouse=True)
 def qt_app() -> Iterator[QApplication]:
     existing = QApplication.instance()
     app = existing if isinstance(existing, QApplication) else QApplication([])
     yield app
+
+
+@pytest.fixture(autouse=True)
+def nothing_reaches_the_desktop(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        window_module, "_ask_after_export", lambda *_args: AfterExport.NOTHING
+    )
+
+    for name in ("open_path", "open_folder", "show_in_folder"):
+        monkeypatch.setattr(desktop, name, lambda *_args: True)
 
 
 @pytest.fixture
