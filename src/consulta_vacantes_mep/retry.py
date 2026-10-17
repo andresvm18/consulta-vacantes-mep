@@ -29,8 +29,13 @@ def _log_retry(state: RetryCallState) -> None:
     says whether the attempt ran out its timeout or failed immediately. Logging
     the exception class alone left a warning that named a failure without
     describing it.
+
+    The delay is the one about to be slept, from next_action. idle_for is the
+    total slept so far, which the first version of this logged: the second
+    retry of a run said "retrying in 3.0s" before sleeping two.
     """
     exception = state.outcome.exception() if state.outcome else None
+    delay = state.next_action.sleep if state.next_action else 0.0
 
     logger.warning(
         "%s attempt %d/%d failed after %.1fs (%s: %s); retrying in %.1fs",
@@ -40,7 +45,7 @@ def _log_retry(state: RetryCallState) -> None:
         state.seconds_since_start or 0.0,
         type(exception).__name__ if exception else "unknown",
         exception,
-        state.idle_for,
+        delay,
     )
 
 

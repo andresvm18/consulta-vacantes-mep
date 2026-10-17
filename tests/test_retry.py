@@ -2,6 +2,7 @@
 
 import pytest
 
+from consulta_vacantes_mep import retry as retry_module
 from consulta_vacantes_mep.exceptions import (
     PermanentScrapingError,
     TransientScrapingError,
@@ -46,3 +47,33 @@ def test_original_exception_propagates_when_attempts_run_out() -> None:
 
     with pytest.raises(TransientScrapingError, match="still broken"):
         always_fails()
+
+
+class RecordingLogger:
+    """Stands in for the module's logger, keeping the arguments of each call."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, ...]] = []
+
+    def warning(self, _message: str, *args: object) -> None:
+        self.calls.append(args)
+
+
+def test_each_retry_logs_the_delay_about_to_be_slept(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Not the total slept so far, which is what the warning used to show: one
+    second, then three, for waits of one and two."""
+    recorder = RecordingLogger()
+    monkeypatch.setattr(retry_module, "logger", recorder)
+
+    @with_retry
+    def always_fails() -> None:
+        raise TransientScrapingError("still broken")
+
+    with pytest.raises(TransientScrapingError):
+        always_fails()
+
+    delays = [call[-1] for call in recorder.calls]
+
+    assert delays == [1.0, 2.0]
