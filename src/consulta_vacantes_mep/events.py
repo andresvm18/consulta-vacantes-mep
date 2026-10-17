@@ -92,4 +92,4 @@ class NullReporter:
     """
 
     def emit(self, _event: Event, /) -> None:
-      return
+        return
