@@ -52,6 +52,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   later pages out of the DOM entirely, so an office spanning more than one page
   would have been read as a subset with nothing to indicate it. Every office
   observed so far fits on one page; a run that finds otherwise now says so.
+- Personal data is left out of exported workbooks unless asked for. The
+  appointments sheet carries neither the cédula nor the name by default, since
+  a workbook is a file that gets forwarded and the other eleven columns already
+  answer whether a post was filled. `--datos-personales` asks for them, and
+  `CVM_EXPORT_PERSONAL_DATA` sets the default for every interface, so the
+  planned GUI inherits the policy rather than reimplementing it.
+- National identification numbers are removed from everything written to the
+  log files and the terminal, tracebacks included. A log file outlives the run
+  that produced it, and the registry attaches a cédula to every record.
+- Test coverage for the three modules that decide what may leave the program:
+  the labels, the redaction pattern, and the logging configuration that applies
+  it. The suite went from 110 tests to 187.
+- A desktop window, built on PySide6 and the second consumer of the application
+  layer. It searches every specialty or one of them, lists vacancies and
+  appointments in two tabs, rescrapes the vacancy list, and exports, driving the
+  same `Session` the subcommands drive.
+- Progress during a run reaches the window as Qt signals. The scrapers already
+  emitted events for whoever was listening; a reporter forwards each one, and Qt
+  queues it onto the thread that owns the widgets.
+- Searches run on a thread of their own, so a run that takes half a minute no
+  longer stops the interface repainting.
+- A startup sequence shared by both interfaces: check for a browser, say a
+  download is about to start, install, report what happened. The wording is each
+  interface's own, as a printed line or as a dialog.
+- Test coverage for everything stage 9 added, and for the entry point's choice
+  between the two interfaces, which had none at all. The suite went from 187
+  tests to 323.
 
 ### Changed
 
@@ -214,33 +241,6 @@ Baseline snapshot of the pre-modernization codebase, tagged as `v0.3.0-legacy`.
 - Excel export with styled headers, frozen panes, and auto-fit columns.
 - Interactive console menu.
 - PyInstaller spec for Windows distribution.
-- Personal data is left out of exported workbooks unless asked for. The
-  appointments sheet carries neither the cédula nor the name by default, since
-  a workbook is a file that gets forwarded and the other eleven columns already
-  answer whether a post was filled. `--datos-personales` asks for them, and
-  `CVM_EXPORT_PERSONAL_DATA` sets the default for every interface, so the
-  planned GUI inherits the policy rather than reimplementing it.
-- National identification numbers are removed from everything written to the
-  log files and the terminal, tracebacks included. A log file outlives the run
-  that produced it, and the registry attaches a cédula to every record.
-- Test coverage for the three modules that decide what may leave the program:
-  the labels, the redaction pattern, and the logging configuration that applies
-  it. The suite went from 110 tests to 187.
-- A desktop window, built on PySide6 and the second consumer of the application
-  layer. It searches every specialty or one of them, lists vacancies and
-  appointments in two tabs, rescrapes the vacancy list, and exports, driving the
-  same `Session` the subcommands drive.
-- Progress during a run reaches the window as Qt signals. The scrapers already
-  emitted events for whoever was listening; a reporter forwards each one, and Qt
-  queues it onto the thread that owns the widgets.
-- Searches run on a thread of their own, so a run that takes half a minute no
-  longer stops the interface repainting.
-- A startup sequence shared by both interfaces: check for a browser, say a
-  download is about to start, install, report what happened. The wording is each
-  interface's own, as a printed line or as a dialog.
-- Test coverage for everything stage 9 added, and for the entry point's choice
-  between the two interfaces, which had none at all. The suite went from 187
-  tests to 323.
 
 ### Known issues
 
@@ -254,7 +254,3 @@ Baseline snapshot of the pre-modernization codebase, tagged as `v0.3.0-legacy`.
 - One Chromium instance is launched per vacancy number, costing roughly 80
   seconds of startup overhead before the first result.
 - The PyInstaller spec does not bundle Playwright browser binaries.
-- The first regional office of a run always fails its first attempt. Blazor
-  prerenders the markup, so no condition on the DOM can tell a live app from a
-  rendered one, and a selection made before the app connects goes unanswered.
-  The retry covers it at a cost of about four seconds per run.
