@@ -29,8 +29,10 @@ from consulta_vacantes_mep.exceptions import ScrapingError
 from consulta_vacantes_mep.exports.excel import export_data_to_excel, filename_prefix
 from consulta_vacantes_mep.models import Appointment, Vacancy
 from consulta_vacantes_mep.settings import EXPORT, default_year
-from consulta_vacantes_mep.utils.logger import configure_logging
+from consulta_vacantes_mep.utils.logger import configure_logging, get_logger
 from consulta_vacantes_mep.utils.playwright_setup import ChromiumStatus
+
+logger = get_logger(__name__)
 
 console = Console()
 app = typer.Typer(
@@ -60,6 +62,13 @@ SCRAPING_FAILURE_MESSAGE = (
     "nuevo; el detalle quedó en logs/errors.log."
 )
 NO_VACANCIES_MESSAGE = "No se encontraron vacantes para esa búsqueda."
+
+# The same advice the window gives. Excel locks a workbook it has open, and a
+# second export within the same minute writes to the same name.
+EXPORT_FAILURE_MESSAGE = (
+    "No se pudo escribir el archivo. Si lo tiene abierto en Excel, ciérrelo e "
+    "intente de nuevo; el detalle quedó en logs/errors.log."
+)
 
 
 def _announce_download() -> None:
@@ -156,13 +165,24 @@ def export_result(
     *,
     include_personal: bool = EXPORT.include_personal_data,
 ) -> None:
-    """Write the workbook and say where it landed."""
-    file_path = export_data_to_excel(
-        vacancies,
-        appointments,
-        filename_prefix(specialty),
-        include_personal=include_personal,
-    )
+    """Write the workbook and say where it landed, or that it could not be.
+
+    A file that could not be written is an OSError, a PermissionError when Excel
+    has it open. Left alone it reached the user as a traceback, after the
+    results had already been shown.
+    """
+    try:
+        file_path = export_data_to_excel(
+            vacancies,
+            appointments,
+            filename_prefix(specialty),
+            include_personal=include_personal,
+        )
+
+    except OSError:
+        logger.exception("The workbook could not be written")
+        console.print(f"\n  [red]{EXPORT_FAILURE_MESSAGE}[/red]")
+        raise typer.Exit(code=1) from None
 
     if file_path:
         console.print(f"\n  Archivo Excel generado:\n  {file_path}")
