@@ -80,6 +80,18 @@ def test_a_failed_run_says_so_in_spanish(runner: CliRunner, command: str) -> Non
 
 
 @pytest.mark.parametrize("command", ["buscar", "vacantes"])
+def test_a_failed_run_says_where_the_detail_is(runner: CliRunner, command: str) -> None:
+    """The log moves with the build: under the working directory from source,
+    under AppData installed. Whitespace is dropped before looking, since Rich
+    folds a path too long for the line."""
+    result = runner.invoke(app, [command])
+
+    written = "".join(_text(result).split())
+
+    assert "errors.log" in written
+
+
+@pytest.mark.parametrize("command", ["buscar", "vacantes"])
 def test_the_exception_is_not_left_to_escape(runner: CliRunner, command: str) -> None:
     """Typer would print a traceback for it. The user is told what happened;
     the traceback is the log's business."""

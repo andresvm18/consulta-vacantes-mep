@@ -29,7 +29,7 @@ from consulta_vacantes_mep.exceptions import ScrapingError
 from consulta_vacantes_mep.exports.excel import export_data_to_excel, filename_prefix
 from consulta_vacantes_mep.models import Appointment, Vacancy
 from consulta_vacantes_mep.settings import EXPORT, default_year
-from consulta_vacantes_mep.utils.logger import configure_logging, get_logger
+from consulta_vacantes_mep.utils.logger import ERROR_FILE, configure_logging, get_logger
 from consulta_vacantes_mep.utils.playwright_setup import ChromiumStatus
 
 logger = get_logger(__name__)
@@ -58,8 +58,7 @@ CHROMIUM_MESSAGES = {
 # A run that could not read the site. Worded so it cannot be mistaken for the
 # site having published nothing, which is the other way a run comes back empty.
 SCRAPING_FAILURE_MESSAGE = (
-    "No se pudo consultar el sitio del MEP. Revise su conexión e intente de "
-    "nuevo; el detalle quedó en logs/errors.log."
+    "No se pudo consultar el sitio del MEP. Revise su conexión e intente de nuevo."
 )
 NO_VACANCIES_MESSAGE = "No se encontraron vacantes para esa búsqueda."
 
@@ -67,7 +66,7 @@ NO_VACANCIES_MESSAGE = "No se encontraron vacantes para esa búsqueda."
 # second export within the same minute writes to the same name.
 EXPORT_FAILURE_MESSAGE = (
     "No se pudo escribir el archivo. Si lo tiene abierto en Excel, ciérrelo e "
-    "intente de nuevo; el detalle quedó en logs/errors.log."
+    "intente de nuevo."
 )
 
 
@@ -182,6 +181,7 @@ def export_result(
     except OSError:
         logger.exception("The workbook could not be written")
         console.print(f"\n  [red]{EXPORT_FAILURE_MESSAGE}[/red]")
+        _point_to_the_log()
         raise typer.Exit(code=1) from None
 
     if file_path:
@@ -197,6 +197,16 @@ def new_session() -> tuple[Session, RichReporter]:
     return Session(reporter=reporter), reporter
 
 
+def _point_to_the_log() -> None:
+    """Say where the detail of a failure was written.
+
+    On a line of its own, and from the logger module rather than spelled out in
+    the messages above: where the log lives depends on whether this is the
+    installed build, and a long path wrapped mid-sentence is hard to copy.
+    """
+    console.print(f"  El detalle quedó en: {ERROR_FILE}", markup=False, highlight=False)
+
+
 def fail_run() -> NoReturn:
     """Say the site could not be read, and end with a failing exit code.
 
@@ -205,6 +215,7 @@ def fail_run() -> NoReturn:
     already in the log; what the user reads here is only that it failed.
     """
     console.print(f"\n  [red]{SCRAPING_FAILURE_MESSAGE}[/red]")
+    _point_to_the_log()
     raise typer.Exit(code=1)
 
 
