@@ -216,6 +216,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   subcommands say in Spanish that the site could not be read, exit with code 1,
   and write no workbook; the window, which already handled a failed run, is now
   told about one.
+- Network failures are classified as transient. A machine without a connection
+  fails with `net::ERR_NAME_NOT_RESOLVED`, which contains "resolve", so the
+  selector heuristic read it as the site having changed: the failure was not
+  retried, and the log sent whoever read it to the selectors for a machine that
+  was offline. Chromium's `net::ERR_` prefix is now checked first.
+- Tracebacks no longer reach the terminal. A failed run printed forty lines of
+  one ahead of the Spanish sentence explaining it. The screen shows the log
+  message alone, and both log files keep the full traceback.
+- A workbook that could not be written is explained in the subcommands as it
+  already was in the window. Excel locks a file it has open, and a second export
+  within the same minute writes to the same name; the `PermissionError` escaped
+  as a traceback after the results had been shown. The subcommands now say to
+  close the file and try again, and exit with code 1.
+- The retry warning states the delay before the next attempt. It logged the
+  total slept so far, so the second retry of a run said three seconds before
+  sleeping two.
 
 ### Known issues
 
