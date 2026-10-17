@@ -208,6 +208,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `NOTICE` lists Typer, Rich and tenacity among the components a distribution
   bundles. They had been under planned dependencies since stage 6, alongside
   pydantic-settings and httpx, which were never adopted and are now removed.
+- A run that could not read the vacancies page is reported as a failure instead
+  of as no vacancies. The first wait after navigation shared the grid's three
+  second timeout and had no retry, so a slow first load ended the run; the error
+  was then logged and swallowed, and the terminal said nothing had been found.
+  The first load now has its own timeout and is retried as a whole. The
+  subcommands say in Spanish that the site could not be read, exit with code 1,
+  and write no workbook; the window, which already handled a failed run, is now
+  told about one.
 
 ### Known issues
 
