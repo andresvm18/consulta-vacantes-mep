@@ -18,16 +18,52 @@ The result is dist/ConsultaVacantesMEP/, a folder to be distributed whole. It
 holds two executables over one _internal: "Consulta Vacantes MEP.exe", the
 window, with no console; and consulta-vacantes-mep.exe, the subcommands, for a
 terminal.
+
+The licenses go beside them, at the top of the folder where a person looks
+rather than inside _internal: this project's own, the NOTICE, and what the LGPL
+asks of anyone distributing Qt, which is its text, the GPL text it builds on,
+and where to get the source of the exact version bundled. That last one is
+written here rather than kept in the repository, because the version is only
+known once the build has picked it up.
 """
 
 import os
+import shutil
 import subprocess
 import sys
+from importlib.metadata import version
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "ConsultaVacantesMEP.spec"
 OUTPUT = ROOT / "dist" / "ConsultaVacantesMEP"
+
+# .txt on the copies, so a double click opens them on Windows.
+PROJECT_LICENSES = {"LICENSE": "LICENSE.txt", "NOTICE": "NOTICE.txt"}
+THIRD_PARTY_LICENSES = ROOT / "licenses"
+
+QT_NOTICE = """\
+Qt for Python: PySide6-Essentials {pyside} and shiboken6 {shiboken}
+
+This application uses Qt for Python, the official Python bindings for the Qt
+toolkit, under the GNU Lesser General Public License version 3. The full text
+of that license, and of the GNU General Public License version 3 it builds on,
+are in this folder as LGPL-3.0.txt and GPL-3.0.txt.
+
+The Qt libraries are the DLL and PYD files in _internal\\PySide6 and
+_internal\\shiboken6. They are loaded at run time, have not been modified, and
+may be replaced with your own build of the same or a compatible version.
+
+The source code of this version of Qt for Python is published by The Qt
+Company at:
+
+    https://download.qt.io/official_releases/QtForPython/
+    https://code.qt.io/cgit/pyside/pyside-setup.git/ (tag v{pyside})
+
+and of the Qt libraries it is built on, Qt {pyside}, at:
+
+    https://download.qt.io/official_releases/qt/
+"""
 
 
 def _run(*args: str, env: dict[str, str] | None = None) -> None:
@@ -40,6 +76,23 @@ def _run(*args: str, env: dict[str, str] | None = None) -> None:
 def _size_in_megabytes(folder: Path) -> float:
     total = sum(path.stat().st_size for path in folder.rglob("*") if path.is_file())
     return total / (1024 * 1024)
+
+
+def _ship_licenses() -> None:
+    """Put the licenses at the top of the built folder, beside the executables."""
+    for source, name in PROJECT_LICENSES.items():
+        shutil.copyfile(ROOT / source, OUTPUT / name)
+
+    target = OUTPUT / "licenses"
+    target.mkdir(exist_ok=True)
+
+    for text in sorted(THIRD_PARTY_LICENSES.glob("*.txt")):
+        shutil.copyfile(text, target / text.name)
+
+    notice = QT_NOTICE.format(
+        pyside=version("PySide6-Essentials"), shiboken=version("shiboken6")
+    )
+    (target / "Qt-source.txt").write_text(notice, encoding="utf-8")
 
 
 def main() -> int:
@@ -55,6 +108,8 @@ def main() -> int:
     except subprocess.CalledProcessError as error:
         print(f"\nThe build failed at: {' '.join(error.cmd[1:])}", file=sys.stderr)
         return 1
+
+    _ship_licenses()
 
     print(f"\nBuilt {OUTPUT} ({_size_in_megabytes(OUTPUT):.0f} MB)")
     return 0
