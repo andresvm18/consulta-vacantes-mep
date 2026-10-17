@@ -68,16 +68,46 @@ This project depends on the following open-source components. When distributed
 as a frozen Windows executable, these components are bundled into the
 distribution, and this notice applies to that distribution as well.
 
+The license texts travel with the distributed folder, under licenses/. The Qt
+licenses and source notice are at its top level; every other component's
+license files, copied from the exact version bundled, are in
+licenses/third-party/, one folder per component.
+
 --------------------------------------------------------------------------------
 Playwright for Python
 Copyright (c) Microsoft Corporation
 License: Apache License 2.0
 https://github.com/microsoft/playwright-python
 
-  Includes Chromium, distributed under the BSD 3-Clause License together with
-  additional licenses listed in the Chromium source tree.
+  Includes the Playwright driver, which carries its own NOTICE and third-party
+  notices, and Node.js, which runs it.
+  Node.js: Copyright Node.js contributors. License: MIT, together with the
+  licenses of the components it bundles, listed in its LICENSE file.
+  https://nodejs.org
+
+  Includes Chromium, as the headless shell Playwright downloads for it,
+  distributed under the BSD 3-Clause License together with additional licenses
+  listed in the Chromium source tree.
   Copyright (c) The Chromium Authors
   https://chromium.googlesource.com/chromium/src/+/main/LICENSE
+
+--------------------------------------------------------------------------------
+greenlet
+Copyright (c) Armin Rigo, Christian Tismer and contributors
+License: MIT, and PSF License 2.0 for parts derived from CPython
+https://github.com/python-greenlet/greenlet
+
+--------------------------------------------------------------------------------
+pyee
+Copyright (c) 2021 Josh Holbrook
+License: MIT
+https://github.com/jfhbrook/pyee
+
+--------------------------------------------------------------------------------
+typing_extensions
+Copyright (c) Python Software Foundation
+License: Python Software Foundation License 2.0
+https://github.com/python/typing_extensions
 
 --------------------------------------------------------------------------------
 openpyxl
@@ -87,17 +117,9 @@ https://foss.heptapod.net/openpyxl/openpyxl
 
 --------------------------------------------------------------------------------
 et_xmlfile
+Copyright (c) 2010 openpyxl
 License: MIT
-
---------------------------------------------------------------------------------
-greenlet
-License: MIT
-https://github.com/python-greenlet/greenlet
-
---------------------------------------------------------------------------------
-pyee
-License: MIT
-https://github.com/jfhbrook/pyee
+https://foss.heptapod.net/openpyxl/et_xmlfile
 
 --------------------------------------------------------------------------------
 Typer
@@ -105,11 +127,53 @@ Copyright (c) 2019 Sebastián Ramírez
 License: MIT
 https://github.com/fastapi/typer
 
+  Includes a vendored copy of Click.
+  Click: Copyright 2014 Pallets. License: BSD 3-Clause.
+  https://github.com/pallets/click
+
+--------------------------------------------------------------------------------
+annotated-doc
+Copyright (c) 2025 Sebastián Ramírez
+License: MIT
+https://github.com/fastapi/annotated-doc
+
+--------------------------------------------------------------------------------
+shellingham
+Copyright (c) 2018 Tzu-ping Chung
+License: ISC
+https://github.com/sarugaku/shellingham
+
+--------------------------------------------------------------------------------
+colorama
+Copyright (c) 2010 Jonathan Hartley
+License: BSD 3-Clause
+https://github.com/tartley/colorama
+
 --------------------------------------------------------------------------------
 Rich
 Copyright (c) 2020 Will McGugan
 License: MIT
 https://github.com/Textualize/rich
+
+--------------------------------------------------------------------------------
+markdown-it-py
+Copyright (c) 2020 ExecutableBookProject
+License: MIT, including the license of the markdown-it project it ports
+(Copyright (c) 2014 Vitaly Puzrin, Alex Kocharin)
+https://github.com/executablebooks/markdown-it-py
+
+--------------------------------------------------------------------------------
+mdurl
+Copyright (c) 2015 Vitaly Puzrin, Alex Kocharin; 2021 Taneli Hukkinen
+License: MIT, including the notice of the Node.js code it derives from
+(Copyright Joyent, Inc. and other Node contributors)
+https://github.com/executablebooks/mdurl
+
+--------------------------------------------------------------------------------
+Pygments
+Copyright (c) 2006-2022 by the respective authors (see AUTHORS file)
+License: BSD 2-Clause
+https://pygments.org
 
 --------------------------------------------------------------------------------
 tenacity
@@ -126,8 +190,9 @@ https://www.qt.io/qt-for-python
 
   Qt is dynamically linked and is not statically compiled into this project.
   Users of a distributed binary have the right to replace the bundled Qt
-  libraries with their own compatible versions. The full LGPL v3 text and the
-  Qt source availability notice accompany any binary that bundles Qt.
+  libraries with their own compatible versions. The full LGPL v3 and GPL v3
+  texts, and where to obtain the source of the exact version bundled, are in
+  the licenses/ folder of the distribution.
 
   Installed as PySide6-Essentials, which is QtCore, QtGui and QtWidgets. The
   PySide6 metapackage adds WebEngine, 3D, Charts and Multimedia, none of which
@@ -149,9 +214,11 @@ non-GPL applications built with it
 https://github.com/pyinstaller/pyinstaller
 
 --------------------------------------------------------------------------------
-Python Standard Library
+Python
 Copyright (c) 2001-2026 Python Software Foundation
-License: Python Software Foundation License Version 2
+License: Python Software Foundation License Version 2, together with the
+licenses of the third-party components its Windows build includes, all listed
+in its LICENSE file.
 https://docs.python.org/3/license.html
 
 --------------------------------------------------------------------------------

@@ -25,13 +25,20 @@ asks of anyone distributing Qt, which is its text, the GPL text it builds on,
 and where to get the source of the exact version bundled. That last one is
 written here rather than kept in the repository, because the version is only
 known once the build has picked it up.
+
+The other components bundled are MIT, BSD, ISC, PSF and Apache licensed, and
+those licenses ask for their text to travel with a binary, not just a name in
+a NOTICE. Their license files are copied from the installed distributions, so
+they always match the versions in the build. A distribution with no license
+file to copy fails the build rather than shipping without one.
 """
 
 import os
+import re
 import shutil
 import subprocess
 import sys
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, distribution, version
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -41,6 +48,35 @@ OUTPUT = ROOT / "dist" / "ConsultaVacantesMEP"
 # .txt on the copies, so a double click opens them on Windows.
 PROJECT_LICENSES = {"LICENSE": "LICENSE.txt", "NOTICE": "NOTICE.txt"}
 THIRD_PARTY_LICENSES = ROOT / "licenses"
+
+# Every distribution whose code PyInstaller's analysis put in the build, by its
+# name on PyPI. Click is not here because Typer vendors it, license included.
+# Qt is not here either: its wheels carry only the commercial license, and the
+# LGPL texts and source notice are shipped separately.
+BUNDLED_DISTRIBUTIONS = (
+    "annotated-doc",
+    "colorama",
+    "et_xmlfile",
+    "greenlet",
+    "markdown-it-py",
+    "mdurl",
+    "openpyxl",
+    "playwright",
+    "pyee",
+    "pygments",
+    "pyinstaller",
+    "rich",
+    "shellingham",
+    "tenacity",
+    "typer",
+    "typing_extensions",
+)
+
+# Matched against the file name only, from the start, so a module that merely
+# mentions licenses in its name is not taken for one.
+LICENSE_FILE = re.compile(
+    r"^(licen[cs]e|copying|notice|authors|thirdpartynotices)", re.IGNORECASE
+)
 
 QT_NOTICE = """\
 Qt for Python: PySide6-Essentials {pyside} and shiboken6 {shiboken}
@@ -63,6 +99,10 @@ Company at:
 and of the Qt libraries it is built on, Qt {pyside}, at:
 
     https://download.qt.io/official_releases/qt/
+
+It can also be requested from the author of this application, through
+https://github.com/andresvm18/consulta-vacantes-mep/issues, for at least three
+years after this copy was distributed.
 """
 
 
@@ -95,6 +135,74 @@ def _ship_licenses() -> None:
     (target / "Qt-source.txt").write_text(notice, encoding="utf-8")
 
 
+def _ship_dependency_licenses() -> list[str]:
+    """Copy each bundled distribution's license files, and name any without one.
+
+    A file inside the dist-info keeps its own name. One elsewhere in the
+    package, such as the license of the Click that Typer vendors, is prefixed
+    with its folder, so two files called LICENSE do not overwrite each other.
+    """
+    target = OUTPUT / "licenses" / "third-party"
+    missing: list[str] = []
+
+    for name in BUNDLED_DISTRIBUTIONS:
+        try:
+            dist = distribution(name)
+        except PackageNotFoundError:
+            missing.append(name)
+            continue
+
+        files = [
+            file
+            for file in dist.files or []
+            if LICENSE_FILE.match(file.name) and file.suffix not in {".py", ".pyc"}
+        ]
+
+        if not files:
+            missing.append(name)
+            continue
+
+        folder = target / f"{dist.metadata['Name']}-{dist.version}"
+        folder.mkdir(parents=True, exist_ok=True)
+
+        for file in files:
+            inside_metadata = ".dist-info" in str(file.parent)
+            copy_name = file.name if inside_metadata else f"{file.parent.name}-{file.name}"
+            shutil.copyfile(Path(str(file.locate())), folder / copy_name)
+
+    # The browser is downloaded by `playwright install`, not installed with the
+    # package, so its license is not in any distribution's file list. It is in
+    # the build already, deep in _internal; this puts a copy where it is seen.
+    try:
+        browsers = Path(
+            str(distribution("playwright").locate_file("playwright/driver/package/.local-browsers"))
+        )
+    except PackageNotFoundError:
+        browsers = Path()
+
+    shell_licenses = sorted(browsers.glob("chromium_headless_shell-*/*/LICENSE*"))
+
+    if shell_licenses:
+        folder = target / shell_licenses[0].parent.parent.name
+        folder.mkdir(parents=True, exist_ok=True)
+
+        for license_file in shell_licenses:
+            shutil.copyfile(license_file, folder / license_file.name)
+    else:
+        missing.append("Chromium headless shell")
+
+    python_license = Path(sys.base_prefix) / "LICENSE.txt"
+
+    if python_license.is_file():
+        folder = target / f"Python-{sys.version.split()[0]}"
+        folder.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(python_license, folder / "LICENSE.txt")
+    else:
+        missing.append("Python")
+
+    return missing
+
+
 def main() -> int:
     # 0 means "inside the playwright package", which is where collect_all looks.
     # Set for the install only: the developer's own runs keep using the
@@ -110,6 +218,11 @@ def main() -> int:
         return 1
 
     _ship_licenses()
+    missing = _ship_dependency_licenses()
+
+    if missing:
+        print(f"\nNo license file found for: {', '.join(missing)}", file=sys.stderr)
+        return 1
 
     print(f"\nBuilt {OUTPUT} ({_size_in_megabytes(OUTPUT):.0f} MB)")
     return 0
