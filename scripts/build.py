@@ -14,7 +14,10 @@ Usage, from the repository root with the virtual environment active:
     pip install -e ".[build]"
     python scripts/build.py
 
-The result is dist/ConsultaVacantesMEP/, a folder to be distributed whole.
+The result is dist/ConsultaVacantesMEP/, a folder to be distributed whole. It
+holds two executables over one _internal: "Consulta Vacantes MEP.exe", the
+window, with no console; and consulta-vacantes-mep.exe, the subcommands, for a
+terminal.
 """
 
 import os

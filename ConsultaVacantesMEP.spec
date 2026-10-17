@@ -93,12 +93,35 @@ a.binaries = [entry for entry in a.binaries if not _unwanted(entry[0])]
 
 pyz = PYZ(a.pure)
 
-exe = EXE(
+# Two executables over one analysis, sharing _internal. The window is built
+# without a console, so double clicking it shows nothing but the window: a
+# console-less executable has no standard output either, and a terminal does
+# not even wait for one to finish. The subcommands therefore get their own,
+# with a console, under the same name the pip install gives them.
+window = EXE(
     pyz,
     a.scripts,
     [],
     exclude_binaries=True,
     name='Consulta Vacantes MEP',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=['src/consulta_vacantes_mep/assets/icon.ico'],
+)
+terminal = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name='consulta-vacantes-mep',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -112,7 +135,8 @@ exe = EXE(
     icon=['src/consulta_vacantes_mep/assets/icon.ico'],
 )
 coll = COLLECT(
-    exe,
+    window,
+    terminal,
     a.binaries,
     a.datas,
     strip=False,
