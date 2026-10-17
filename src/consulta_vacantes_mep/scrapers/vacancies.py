@@ -64,13 +64,38 @@ def _wait_for_page_ready(page: Page) -> None:
     prerenders, so the select and the grid exist before the app is live, and a
     selection made in that window changes the DOM value with nothing reacting.
     The first office of a run therefore fails its first attempt; the retry
-    policy covers it, which is why the grid timeout is kept short.
+    policy around the office covers it, which is why the grid timeout is short.
+
+    This wait has a timeout of its own, and a longer one. It used to share the
+    grid's three seconds, and a first load slower than that ended the run before
+    a single office was read.
     """
     page.wait_for_function(
         _PAGE_READY,
         arg={"selector": VACANCIES_TABLE_SELECTOR, "minimum": _PLACEHOLDER_OPTIONS},
-        timeout=SCRAPING.grid_timeout_ms,
+        timeout=SCRAPING.page_ready_timeout_ms,
     )
+
+
+def _open_vacancies_page(page: Page) -> None:
+    """Navigate to the vacancies page and wait for it to render.
+
+    Retried as a whole, navigation included. A page that never rendered is not
+    worth waiting on a second time; loading it again is what a person would do.
+    """
+    try:
+        page.goto(
+            SCRAPING.vacancies_url,
+            wait_until="domcontentloaded",
+            timeout=SCRAPING.page_load_timeout_ms,
+        )
+        _wait_for_page_ready(page)
+
+    except Exception as error:
+        raise classify(error, "vacancies page") from error
+
+
+_open_vacancies_page_with_retry = with_retry(_open_vacancies_page)
 
 
 # MudBlazor replaces the rows with a single full-width cell while the grid is not
@@ -183,6 +208,17 @@ def _get_regional_offices(page: Page) -> list[RegionalOffice]:
 def scrape_all_vacancies(
     headless: bool = SCRAPING.headless, reporter: Reporter | None = None
 ) -> list[Vacancy]:
+    """Read every regional office's published vacancies.
+
+    Raises ScrapingError when the vacancies could not be read at all: the page
+    never loaded, every office failed the same way, or something unexpected
+    broke the run. An empty list means the site published nothing.
+
+    The two used to look the same. A failure was logged and an empty list came
+    back, so the interface told the user there were no vacancies when it had
+    not managed to look. Offices that fail one by one still do not raise; they
+    are counted in PhaseFinished and the rest of the run goes on.
+    """
     report = reporter or NullReporter()
     all_vacancies: list[Vacancy] = []
 
@@ -197,8 +233,7 @@ def scrape_all_vacancies(
         page = browser.new_page()
 
         try:
-            page.goto(SCRAPING.vacancies_url, wait_until="domcontentloaded", timeout=SCRAPING.page_load_timeout_ms)
-            _wait_for_page_ready(page)
+            _open_vacancies_page_with_retry(page)
 
             offices = _get_regional_offices(page)
             total = len(offices)
@@ -237,12 +272,14 @@ def scrape_all_vacancies(
                     )
                 )
 
-        except PermanentScrapingError:
-            logger.exception("All %d offices failed; the site structure changed", total)
+        except ScrapingError:
+            logger.exception("The vacancies could not be read (%d offices listed)", total)
             raise
 
-        except Exception:
+        except Exception as error:
             logger.exception("Fatal error in scrape_all_vacancies")
+            message = f"vacancies: unexpected error ({error})"
+            raise ScrapingError(message) from error
 
         finally:
             browser.close()

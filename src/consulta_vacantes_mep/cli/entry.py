@@ -16,7 +16,7 @@ the lines it owns, so a plain print landing in the middle of a run leaves the
 bar drawing over torn output. Everything the user reads goes through here.
 """
 
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 import typer
 from rich.console import Console
@@ -25,6 +25,7 @@ from rich.table import Table
 from consulta_vacantes_mep.app.session import SearchResult, Session
 from consulta_vacantes_mep.app.startup import ensure_chromium
 from consulta_vacantes_mep.cli.reporter import RichReporter
+from consulta_vacantes_mep.exceptions import ScrapingError
 from consulta_vacantes_mep.exports.excel import export_data_to_excel, filename_prefix
 from consulta_vacantes_mep.models import Appointment, Vacancy
 from consulta_vacantes_mep.settings import EXPORT, default_year
@@ -51,6 +52,14 @@ CHROMIUM_MESSAGES = {
         "Instálelo con: python -m playwright install chromium"
     ),
 }
+
+# A run that could not read the site. Worded so it cannot be mistaken for the
+# site having published nothing, which is the other way a run comes back empty.
+SCRAPING_FAILURE_MESSAGE = (
+    "No se pudo consultar el sitio del MEP. Revise su conexión e intente de "
+    "nuevo; el detalle quedó en logs/errors.log."
+)
+NO_VACANCIES_MESSAGE = "No se encontraron vacantes para esa búsqueda."
 
 
 def _announce_download() -> None:
@@ -168,6 +177,17 @@ def new_session() -> tuple[Session, RichReporter]:
     return Session(reporter=reporter), reporter
 
 
+def fail_run() -> NoReturn:
+    """Say the site could not be read, and end with a failing exit code.
+
+    Called once the reporter is closed, not from inside the run: a line printed
+    while the progress bar is live lands between its repaints. The traceback is
+    already in the log; what the user reads here is only that it failed.
+    """
+    console.print(f"\n  [red]{SCRAPING_FAILURE_MESSAGE}[/red]")
+    raise typer.Exit(code=1)
+
+
 @app.callback(invoke_without_command=True)
 def entry_point(ctx: typer.Context) -> None:
     """Open the window, unless a subcommand asked for the terminal instead."""
@@ -209,14 +229,20 @@ def search_command(
 ) -> None:
     """Consulta las vacantes publicadas y los nombramientos hechos contra ellas."""
     session, reporter = new_session()
+    result: SearchResult | None = None
 
     try:
         result = session.search(anio or default_year(), especialidad)
+    except ScrapingError:
+        result = None
     finally:
         reporter.close()
 
+    if result is None:
+        fail_run()
+
     if not result.vacancies:
-        console.print("\n  No se encontraron vacantes para esa búsqueda.")
+        console.print(f"\n  {NO_VACANCIES_MESSAGE}")
         raise typer.Exit(code=1)
 
     show_result(result)
@@ -241,14 +267,20 @@ def vacancies_command(
 ) -> None:
     """Lista las vacantes publicadas, sin consultar nombramientos."""
     session, reporter = new_session()
+    found: list[Vacancy] | None = None
 
     try:
         found = session.vacancies(especialidad)
+    except ScrapingError:
+        found = None
     finally:
         reporter.close()
 
+    if found is None:
+        fail_run()
+
     if not found:
-        console.print("\n  No se encontraron vacantes para esa búsqueda.")
+        console.print(f"\n  {NO_VACANCIES_MESSAGE}")
         raise typer.Exit(code=1)
 
     show_vacancies(found)

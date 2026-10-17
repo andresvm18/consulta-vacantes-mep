@@ -88,6 +88,13 @@ class ScrapingSettings:
     # to more patience overall, not less.
     grid_timeout_ms: int = 3_000
 
+    # Waiting for the vacancies page to render its office list and grid after
+    # navigation. Separate from the grid timeout because it is a different wait:
+    # the grid settles in under a second once the app is up, but the first load
+    # can take longer, and with three seconds a run against the live site died
+    # before reaching the first office.
+    page_ready_timeout_ms: int = 15_000
+
     # Only the fixture capture script still pauses blindly. The scrapers wait on
     # conditions instead: the AJAX runtime, the POST response, and the panel
     # having been patched.
