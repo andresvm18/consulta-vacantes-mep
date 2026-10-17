@@ -123,6 +123,45 @@ def test_an_identifier_does_not_reach_the_console() -> None:
     assert REDACTED in written
 
 
+# ── What the screen shows of a failure ─────────────────────────────────────────
+def _fail_with_traceback() -> None:
+    try:
+        message = "the page never loaded"
+        raise RuntimeError(message)
+    except RuntimeError:
+        get_logger("consulta_vacantes_mep.test").exception("The vacancies could not be read")
+
+
+@pytest.mark.usefixtures("log_dir")
+def test_the_screen_gets_the_message_without_the_traceback() -> None:
+    """The user is about to be told in Spanish what happened. A traceback in
+    front of that sentence buries it."""
+    buffer = StringIO()
+    configure_logging(level="DEBUG", console=Console(file=buffer, width=200))
+
+    _fail_with_traceback()
+
+    written = visible(buffer.getvalue())
+
+    assert "The vacancies could not be read" in written
+    assert "Traceback" not in written
+    assert "the page never loaded" not in written
+
+
+def test_the_files_keep_the_traceback(log_dir: Path) -> None:
+    """The file handlers format the record before the screen does, and the
+    screen must not take the traceback away from them or from each other."""
+    configure_logging(level="DEBUG", console=Console(file=StringIO(), width=200))
+
+    _fail_with_traceback()
+
+    for name in ("activity.log", "errors.log"):
+        written = (log_dir / name).read_text(encoding="utf-8")
+
+        assert "Traceback" in written
+        assert "the page never loaded" in written
+
+
 # ── The log stays worth reading ───────────────────────────────────────────────
 def test_the_rest_of_the_record_survives(log_dir: Path) -> None:
     configure_logging(level="DEBUG")

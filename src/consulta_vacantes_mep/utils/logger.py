@@ -53,6 +53,31 @@ class RedactingFormatter(logging.Formatter):
         return redact_national_ids(super().format(record))
 
 
+class ScreenFormatter(RedactingFormatter):
+    """The redacting formatter, without the traceback.
+
+    What reaches the screen is a sign that something went wrong, for a person
+    who is about to be told in Spanish what it was. Forty lines of traceback in
+    front of that sentence buried it, and they are already in both log files.
+
+    The record is copied rather than edited. Handlers share one record, and the
+    file handlers, which run first, have already cached the rendered traceback
+    on it; clearing that in place would not change what this handler prints and
+    would change what any later handler did.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        if not (record.exc_info or record.exc_text or record.stack_info):
+            return super().format(record)
+
+        bare = logging.makeLogRecord(record.__dict__)
+        bare.exc_info = None
+        bare.exc_text = None
+        bare.stack_info = None
+
+        return super().format(bare)
+
+
 def _build_file_handler(path: Path, level: int) -> RotatingFileHandler:
     """Create a size-limited file handler that keeps a few old copies."""
     handler = RotatingFileHandler(
@@ -74,6 +99,8 @@ def _build_screen_handler(console: Console | None) -> logging.Handler | None:
     lines it owns, and a second writer on the same terminal tears the display.
     Sharing the console makes the record appear above the bar instead.
 
+    Tracebacks stay off the screen; see ScreenFormatter.
+
     A windowed build has no screen at all. PyInstaller with console=False
     leaves sys.stderr as None on Windows, and a handler pointed at it fails on
     the first warning the program emits, which would turn the first sign of
@@ -87,7 +114,7 @@ def _build_screen_handler(console: Console | None) -> logging.Handler | None:
             show_path=False,
             markup=False,
         )
-        rich_handler.setFormatter(RedactingFormatter("%(message)s"))
+        rich_handler.setFormatter(ScreenFormatter("%(message)s"))
         return rich_handler
 
     if sys.stderr is None:
@@ -95,7 +122,7 @@ def _build_screen_handler(console: Console | None) -> logging.Handler | None:
 
     handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(logging.WARNING)
-    handler.setFormatter(RedactingFormatter("  %(levelname)s: %(message)s"))
+    handler.setFormatter(ScreenFormatter("  %(levelname)s: %(message)s"))
     return handler
 
 
