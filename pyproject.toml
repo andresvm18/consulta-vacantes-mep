@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "consulta-vacantes-mep"
-version = "0.3.0"
+version = "0.4.0"
 description = "Consulta vacantes y nombramientos docentes publicados por el MEP de Costa Rica"
 readme = "README.md"
 requires-python = ">=3.12"

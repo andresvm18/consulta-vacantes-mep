@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-18
+
+The first release meant to be installed rather than run from source.
+
 ### Added
 
 - Project README with roadmap and development setup instructions, and this
@@ -79,6 +83,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test coverage for everything stage 9 added, and for the entry point's choice
   between the two interfaces, which had none at all. The suite went from 187
   tests to 323.
+- A Windows installer, built with Inno Setup. It installs for the current user
+  under AppData, so it asks for no administrator rights, and adds a Start menu
+  entry, an optional desktop shortcut and an uninstaller. An update clears the
+  previous runtime before copying the new one, so no file a newer build stopped
+  shipping is left behind. It measures 125 MB.
+- The headless Chromium ships inside the build. `scripts/build.py` installs it
+  into the Playwright package and then runs PyInstaller, and the spec refuses to
+  build without it. A frozen build points Playwright there on its own, so no
+  runtime hook is needed, and a machine with no browser installed runs a search.
+- Two executables over one runtime: `Consulta Vacantes MEP.exe`, the window,
+  with no console at all, and `consulta-vacantes-mep.exe` for the subcommands.
+  A console-less executable has no standard output, and a terminal does not
+  wait for one, so the subcommands needed their own.
+- An application icon, a silhouette of Costa Rica drawn from Natural Earth's
+  public domain boundaries, in seven sizes from 16 to 256 pixels. It is set on
+  the application before any dialog, since Qt does not read the executable's.
+- After an export, the window offers to open the workbook or show it selected
+  in Explorer, and a button that is never disabled opens the export folder,
+  creating it if nothing has been exported yet.
+- The build carries the license of everything it bundles: the LGPL v3 and GPL
+  v3 texts and where to get the source of the exact Qt version shipped, and
+  each dependency's own license files, copied from the installed distributions
+  along with Chromium's and Python's. A dependency with no license file to copy
+  fails the build.
+- Test coverage for everything stage 10 added or fixed. The suite went from 323
+  tests to 388, a few of which run only on Windows or only elsewhere.
 
 ### Changed
 
@@ -161,6 +191,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI installs the three libraries Qt links that a bare runner lacks. They were
   measured rather than remembered, and the test suite asks for Qt's offscreen
   platform itself so a developer's machine and CI behave the same.
+- Installed, the application writes workbooks to `Documents\Consulta Vacantes
+  MEP` and logs to `%LOCALAPPDATA%\Consulta Vacantes MEP\logs`, instead of
+  beside the executable, which the installer puts in a folder nobody opens.
+  Documents is asked of Windows, so a folder moved by OneDrive is found. Runs
+  from source still write under the working directory.
+- The subcommands' failure messages name the real path of the error log on a
+  line of their own, instead of a fixed `logs/errors.log` that is wrong once
+  installed.
+- The build leaves out what the application never uses: NumPy, which openpyxl
+  imports if it can; Qt's software OpenGL renderer and translations; and
+  Playwright's ffmpeg and Chromium's interface languages other than English and
+  Spanish. The application folder went from 509 MB to 420.
+- PyInstaller moved to a `build` extra, apart from the development tools.
+- Python 3.14 joins the CI matrix and the classifiers, since it is what
+  development runs on.
+- The README starts with installing and using the release, and documents how to
+  build the installer.
 
 ### Removed
 
@@ -232,26 +279,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The retry warning states the delay before the next attempt. It logged the
   total slept so far, so the second retry of a run said three seconds before
   sleeping two.
+- `NOTICE` lists every component the build bundles, with copyrights taken from
+  each one's own license file. colorama, which Typer needs on Windows, and the
+  copy of Click that Typer vendors were missing, and Node.js and the headless
+  Chromium are now named under Playwright.
 
 ### Known issues
 
 - Names are not removed from log output. No pattern can tell one from an
   institution or a regional office name, so the only defence is not logging a
   row that carries one. Nothing does today.
-- `NOTICE` does not list the transitive dependencies a frozen build bundles
-  through Typer and Rich: Click, Pygments, markdown-it-py, mdurl, shellingham,
-  annotated-doc, and typing_extensions through pyee. Worth closing before an
-  executable is put in front of anyone.
 - A run cannot be cancelled once it has started. The scrapers have no point at
   which they ask whether they should stop, so a cancel would mean abandoning a
   thread with a browser open in it.
-- The window writes to `outputs/` and names the path in its status bar. It does
-  not offer to choose a folder or to open the one it wrote to.
 - The first regional office of a run sometimes fails its first attempt, costing
   about three seconds. Blazor prerenders the markup, so no condition on the DOM
   distinguishes a live app from a rendered one. Recorded as always happening
   until a run on the first of October did not reproduce it.
-- The PyInstaller spec does not bundle Playwright browser binaries.
+- The installer is not code-signed, so Windows may show a SmartScreen warning
+  for a copy downloaded from the internet.
+- The installer is built on a developer's machine; CI checks the code but does
+  not build it. Inno Setup cannot read a path of 260 characters or more, and
+  Chromium's files sit deep enough that the checkout has to be at a short path.
+  The build checks this before packing.
+- Whether a cédula ever reaches a log file has been tested against redacted
+  fixtures, not against the live registry: no appointment was recorded against
+  the vacancies published while this release was being tested.
 
 ## [0.3.0] - 2026-08-03
 
