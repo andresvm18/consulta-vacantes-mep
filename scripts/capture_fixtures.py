@@ -7,7 +7,10 @@ test suite never has to reach the network.
 Personal data is redacted before writing. See the redaction note below.
 
 Usage:
-    python scripts/capture_fixtures.py --vacancy 1536996 --year 2026
+    python scripts/capture_fixtures.py --vacancy 1536996 --empty 1551606 --year 2026
+
+--vacancy takes a vacancy number with appointments recorded against it and
+--empty one without, so both shapes of the registry's answer are captured.
 """
 
 import argparse

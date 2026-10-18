@@ -21,7 +21,7 @@ logs/
 *.sqlite3
 
 # Saved HTML captured from the live site before anonymization.
-# Only committed fixtures under tests/fixtures/html/ are safe.
+# Only committed fixtures under tests/fixtures/ are safe.
 scripts/captures/
 *.raw.html
 
