@@ -14,13 +14,19 @@ Usage, from the repository root with the virtual environment active:
     pip install -e ".[build]"
     python scripts/build.py
 
-The result is dist/ConsultaVacantesMEP/, a folder to be distributed whole. It
-holds two executables over one _internal: "Consulta Vacantes MEP.exe", the
-window, with no console; and consulta-vacantes-mep.exe, the subcommands, for a
-terminal.
+The result is dist/ConsultaVacantesMEP/, a folder holding two executables over
+one _internal: "Consulta Vacantes MEP.exe", the window, with no console; and
+consulta-vacantes-mep.exe, the subcommands, for a terminal.
 
-The licenses go beside them, at the top of the folder where a person looks
-rather than inside _internal: this project's own, the NOTICE, and what the LGPL
+That folder is then packed into dist/Instalar-Consulta-Vacantes-MEP-<version>.exe
+by Inno Setup, which is what gets distributed: it gives the user a Start menu
+entry, an optional desktop shortcut and an uninstaller, without asking for
+administrator rights. Inno Setup 6.3 or newer has to be installed, for example
+with `winget install --id JRSoftware.InnoSetup -e`. Pass --no-installer to stop
+at the folder.
+
+The licenses go beside the executables, at the top of the folder where a person
+looks rather than inside _internal: this project's own, the NOTICE, and what the LGPL
 asks of anyone distributing Qt, which is its text, the GPL text it builds on,
 and where to get the source of the exact version bundled. That last one is
 written here rather than kept in the repository, because the version is only
@@ -33,6 +39,7 @@ they always match the versions in the build. A distribution with no license
 file to copy fails the build rather than shipping without one.
 """
 
+import argparse
 import os
 import re
 import shutil
@@ -44,6 +51,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "ConsultaVacantesMEP.spec"
 OUTPUT = ROOT / "dist" / "ConsultaVacantesMEP"
+INSTALLER_SCRIPT = ROOT / "installer" / "ConsultaVacantesMEP.iss"
+
+# Windows' classic limit on a path, the terminating character included. Inno
+# Setup is held to it, and Chromium's files nest deep enough inside the
+# Playwright package to cross it from a long checkout path: from the OneDrive
+# desktop the longest came to 265, and the compiler failed with nothing but
+# "the system cannot find the path specified".
+MAX_PATH = 260
 
 # .txt on the copies, so a double click opens them on Windows.
 PROJECT_LICENSES = {"LICENSE": "LICENSE.txt", "NOTICE": "NOTICE.txt"}
@@ -203,7 +218,93 @@ def _ship_dependency_licenses() -> list[str]:
     return missing
 
 
+def _longest_path(folder: Path) -> Path:
+    """The file under folder whose full path is longest."""
+    return max((path for path in folder.rglob("*") if path.is_file()), key=lambda p: len(str(p)))
+
+
+def _paths_fit() -> bool:
+    """Whether every file in the build is reachable by a tool held to MAX_PATH.
+
+    Checked before Inno Setup is run, so a checkout that is too deep is named
+    as the problem rather than surfacing as a path the compiler cannot find.
+    """
+    longest = _longest_path(OUTPUT)
+    length = len(str(longest))
+
+    if length < MAX_PATH:
+        return True
+
+    print(
+        f"\nThe longest path in the build is {length} characters, and Inno Setup"
+        f" cannot read one of {MAX_PATH} or more:\n    {longest}\n"
+        "Move the repository somewhere shorter, such as C:\\Projects, and build again.",
+        file=sys.stderr,
+    )
+    return False
+
+
+def _find_inno_setup() -> Path | None:
+    """The Inno Setup compiler, where an install of it puts it.
+
+    ISCC in the environment wins, for an install somewhere unusual. Otherwise
+    the machine-wide folders, and the per-user one winget uses when it cannot
+    get administrator rights.
+    """
+    configured = os.environ.get("ISCC")
+    candidates = [Path(configured)] if configured else []
+
+    for variable, subfolder in (
+        ("ProgramFiles(x86)", ""),
+        ("ProgramFiles", ""),
+        ("LOCALAPPDATA", "Programs"),
+    ):
+        base = os.environ.get(variable)
+
+        if base:
+            candidates.append(Path(base) / subfolder / "Inno Setup 6" / "ISCC.exe")
+
+    return next((path for path in candidates if path.is_file()), None)
+
+
+def _build_installer() -> Path | None:
+    """Pack the built folder into the installer, or say why it could not be."""
+    compiler = _find_inno_setup()
+
+    if compiler is None:
+        print(
+            "\nInno Setup was not found. Install it with:\n"
+            "    winget install --id JRSoftware.InnoSetup -e\n"
+            "or set ISCC to the path of ISCC.exe, or pass --no-installer.",
+            file=sys.stderr,
+        )
+        return None
+
+    app_version = version("consulta-vacantes-mep")
+    print(f"\n> {compiler.name} {INSTALLER_SCRIPT.name}", flush=True)
+
+    try:
+        subprocess.run(
+            [str(compiler), f"/DAppVersion={app_version}", str(INSTALLER_SCRIPT)],
+            check=True,
+            cwd=ROOT,
+        )
+    except subprocess.CalledProcessError:
+        print("\nThe installer could not be built.", file=sys.stderr)
+        return None
+
+    return ROOT / "dist" / f"Instalar-Consulta-Vacantes-MEP-{app_version}.exe"
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Build the Windows executable.")
+    parser.add_argument(
+        "--no-installer",
+        action="store_true",
+        help="stop at dist/ConsultaVacantesMEP, without packing the installer",
+    )
+    arguments = parser.parse_args()
+
     # 0 means "inside the playwright package", which is where collect_all looks.
     # Set for the install only: the developer's own runs keep using the
     # browsers in their profile.
@@ -225,6 +326,19 @@ def main() -> int:
         return 1
 
     print(f"\nBuilt {OUTPUT} ({_size_in_megabytes(OUTPUT):.0f} MB)")
+
+    if arguments.no_installer:
+        return 0
+
+    if not _paths_fit():
+        return 1
+
+    installer = _build_installer()
+
+    if installer is None:
+        return 1
+
+    print(f"Installer {installer} ({installer.stat().st_size / (1024 * 1024):.0f} MB)")
     return 0
 
 
